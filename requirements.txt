@@ -1,0 +1,25 @@
+# Telegram Bot Framework
+aiogram>=3.4.1
+
+# Supabase (PostgreSQL client)
+supabase>=2.28.3
+
+# Stripe SDK
+stripe>=7.8.0
+
+# Encryption
+cryptography>=41.0.7
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Async HTTP (for BIN lookup)
+httpx>=0.27.0
+
+# Webhook server (included with aiogram, but explicit is better)
+aiohttp>=3.9.0
+
+# Testing
+pytest>=7.4.3
+pytest-asyncio>=0.23.2
+pytest-mock>=3.12.0

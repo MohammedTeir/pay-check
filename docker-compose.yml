@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  bot:
+    build: .
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # Webhook port (only used when WEBHOOK_URL is set)
+    volumes:
+      - ./logs:/app/logs
+    # For local development with hot-reload, uncomment below:
+    # volumes:
+    #   - .:/app
+    # command: ["python", "-u", "bot.py"]

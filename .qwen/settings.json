@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kill *)",
+      "Bash(sleep *)",
+      "Bash(python3)",
+      "Bash(with)",
+      "Bash(as *)",
+      "Bash(lines *)",
+      "Bash(duplicates_to_remove *)",
+      "Bash('# ── updated admin audit log with filter button',)",
+      "Bash('# ── updated plan list with edit button',)",
+      "Bash('# ── updated user detail with delete button',)",
+      "Bash('# ── updated stripe list with rename button',)",
+      "Bash('# ── updated plan delete with confirmation',)",
+      "Bash(])",
+      "Bash(print)",
+      "Bash(eof)",
+      "Bash(sed *)",
+      "Bash(xargs *)"
+    ]
+  },
+  "$version": 3
+}
