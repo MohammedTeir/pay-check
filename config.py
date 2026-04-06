@@ -55,6 +55,17 @@ class Config:
     stripe_amount_cents: int = field(
         default_factory=lambda: int(os.getenv("STRIPE_AMOUNT_CENTS", "50"))
     )
+    stripe_publishable_key: str = field(
+        default_factory=lambda: os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    )
+
+    # Webapp (for Stripe Elements automation)
+    webapp_port: int = field(
+        default_factory=lambda: int(os.getenv("WEBAPP_PORT", "5000"))
+    )
+    webapp_url: str = field(
+        default_factory=lambda: os.getenv("WEBAPP_URL", "http://127.0.0.1:5000")
+    )
 
     # Rate limiting
     rate_limit_per_hour: int = field(

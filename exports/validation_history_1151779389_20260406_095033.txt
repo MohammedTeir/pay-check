@@ -1,0 +1,90 @@
+Validation History Export
+User: teirmido
+Telegram ID: 1151779389
+Generated: 2026-04-06 09:50:33 UTC
+Total Validations: 20
+============================================================
+
+[1] 2026-04-05 21:37
+    Card: 458052******8921
+    Status: BIN_CHECK
+
+[2] 2026-04-05 21:34
+    Card: 525336******2837
+    Status: BIN_CHECK
+
+[3] 2026-04-05 21:30
+    Card: 525336******2837
+    Status: BIN_CHECK
+
+[4] 2026-04-05 19:17
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[5] 2026-04-05 19:15
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[6] 2026-04-05 19:10
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[7] 2026-04-05 17:10
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[8] 2026-04-05 16:56
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[9] 2026-04-05 10:01
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[10] 2026-04-05 08:55
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[11] 2026-04-05 08:50
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[12] 2026-04-05 08:40
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[13] 2026-04-05 08:33
+    Card: 375154******1164
+    Status: BIN_CHECK
+
+[14] 2026-04-04 19:25
+    Card: 539268******7980
+    Status: BIN_CHECK
+
+[15] 2026-04-04 15:30
+    Card: 539268******7980
+    Status: BIN_CHECK
+
+[16] 2026-04-04 15:26
+    Card: 585624******7869
+    Status: BIN_CHECK
+
+[17] 2026-04-04 15:26
+    Card: 585624******7869
+    Status: BIN_CHECK
+
+[18] 2026-04-04 15:20
+    Card: 486871******9038
+    Status: BIN_CHECK
+
+[19] 2026-04-04 15:14
+    Card: 486871******9038
+    Status: BIN_CHECK
+
+[20] 2026-04-04 15:07
+    Card: 486871******9038
+    Status: BIN_CHECK
+
+============================================================
+Summary:
+  bin_check: 20

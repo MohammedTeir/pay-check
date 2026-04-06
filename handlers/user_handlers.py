@@ -159,6 +159,20 @@ async def cb_u_balance(query: CallbackQuery) -> None:
     await query.answer()
 
 
+async def cmd_balance(message: Message) -> None:
+    """Slash command version of balance."""
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Use /start first.", parse_mode="MarkdownV2"); return
+    bal = "∞" if _is_admin(uid) else str(user.credits)
+    await message.answer(
+        f"💰 *Balance*\n\nCredits: `{bal}`",
+        parse_mode="MarkdownV2",
+        reply_markup=_menu(uid),
+    )
+
+
 async def cb_u_quota(query: CallbackQuery) -> None:
     """Show rate limit quota status."""
     uid = query.from_user.id
@@ -380,6 +394,110 @@ async def cb_export_txt(query: CallbackQuery) -> None:
     await query.answer()
 
 
+async def cmd_quota(message: Message) -> None:
+    """Slash command version of quota."""
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Use /start first.", parse_mode="MarkdownV2"); return
+    status = get_user_rate_limit_status(uid)
+    text = format_rate_limit_status(status)
+    await message.answer(text, parse_mode="MarkdownV2", reply_markup=_menu(uid))
+
+
+async def cmd_plans(message: Message) -> None:
+    """Slash command version of plans."""
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Use /start first.", parse_mode="MarkdownV2"); return
+    plans = Plan.get_active()
+    if not plans:
+        await message.answer("📭 No active plans\\. Contact admin\\.", parse_mode="MarkdownV2",
+                             reply_markup=_menu(uid)); return
+    lines = ["📦 *Plans*\n"]
+    for p in plans:
+        ps = f"${p.crypto_price_usd:.2f}".replace(".", "\\.")
+        lines.append(f"• {escape_md(p.name)} — {p.credits}cr — `{ps}`")
+    lines.append("\nDM admin with TX ID after payment\\.")
+    await message.answer("\n".join(lines), parse_mode="MarkdownV2", reply_markup=_menu(uid))
+
+
+async def cmd_history(message: Message) -> None:
+    """Slash command version of history."""
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Use /start first.", parse_mode="MarkdownV2"); return
+    logs = ValidationLog.get_by_user(uid, limit=15)
+    if not logs:
+        await message.answer("📭 No history yet\\. Use 📤 Export to download data\\.", parse_mode="MarkdownV2",
+                             reply_markup=_menu(uid)); return
+    lines = ["📜 *History* \\(last 15\\)\n"]
+    for l in logs[:15]:
+        ic = {"valid": "✅", "declined": "❌", "error": "⚠️", "3ds_required": "🔒", "duplicate": "⏳"}.get(l.status, "❓")
+        dc = f" \\({escape_md(l.decline_code)}\\)" if l.decline_code else ""
+        ts = l.created_at.strftime("%m/%d %H:%M") if l.created_at else "?"
+        status_escaped = escape_md(l.status)
+        card_bin_escaped = escape_md(l.card_bin or "")
+        last4_escaped = escape_md(l.last4 or "")
+        lines.append(f"{ic} `{ts}` — `{card_bin_escaped}****{last4_escaped}` — {status_escaped}{dc}")
+    lines.append("\n📤 Want full data? Use the *Export* button below to download all history\\.")
+    from utils.keyboards import InlineKeyboardMarkup, InlineKeyboardButton
+    kb_with_export = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📤 Export Full History", callback_data="u_export_history")],
+        [InlineKeyboardButton(text="🔙 Main Menu", callback_data="u_menu")],
+    ])
+    await message.answer("\n".join(lines), parse_mode="MarkdownV2", reply_markup=kb_with_export)
+
+
+async def cmd_validate(message: Message, state: FSMContext) -> None:
+    """Slash command version of validate."""
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Use /start first.", parse_mode="MarkdownV2"); return
+    if user.is_banned:
+        await message.answer("🚫 Account suspended.", parse_mode="MarkdownV2"); return
+    from models.stripe_account import StripeAccount
+    from models.settings import Settings
+    sa = StripeAccount.get_active()
+    is_adm = _is_admin(uid)
+    bal = "∞" if is_adm else str(user.credits)
+    if sa:
+        cost = "0" if is_adm else (Settings.get("stripe_validation_cost") or "1")
+        mode_desc = f"cost: `{cost}` credit" if cost != "0" else "free"
+        mode = f"🔗 *Stripe* — {mode_desc}"
+    else:
+        cost = "0" if is_adm else (Settings.get("bin_validation_cost") or "0")
+        mode_desc = f"cost: `{cost}` credit" if cost != "0" else "free"
+        mode = f"📡 *BIN\\+AI* — {mode_desc}"
+    text = (
+        f"💳 *Validate Card*\n\n"
+        f"Send card data:\n"
+        f"`number|exp_month|exp_year|cvv`\n\n"
+        f"Example: `4242424242424242|12|2027|123`\n\n"
+        f"{mode}\n"
+        f"💰 Balance: `{bal}`"
+    )
+    await message.answer(text, parse_mode="MarkdownV2", reply_markup=back_to_user_menu())
+    await state.set_state(CardValidationState.waiting_for_card)
+
+
+async def cmd_help(message: Message) -> None:
+    """Slash command version of help."""
+    await message.answer(
+        "📖 *Help*\n\n"
+        "💳 *Validate:* tap Validate or use /validate, then send `num|mm|yyyy|cvv`\n\n"
+        "💰 *Balance:* tap Balance or use /balance\n\n"
+        "📦 *Plans:* tap Plans or use /plans\n\n"
+        "📜 *History:* tap History or use /history for last 15 results\n\n"
+        "⚠️ 1 credit per validation\\. 24h cooldown per card\\.",
+        parse_mode="MarkdownV2",
+        reply_markup=_menu(message.from_user.id),
+    )
+
+
 async def cb_u_help(query: CallbackQuery) -> None:
     await query.message.answer(
         "📖 *Help*\n\n"
@@ -462,6 +580,7 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
         number=cn, exp_month=int(d["exp_month"]), exp_year=int(d["exp_year"]),
         cvv=d["cvv"], bin_code=d["bin_code"], last4=d["last4"])
     proc_msg = await query.message.answer("⏳ Processing\\.\\.\\.", parse_mode="MarkdownV2")
+    await query.answer()  # Answer immediately to avoid timeout
     await state.clear()
     sa = StripeAccount.get_active()
     bc = int(Settings.get("bin_validation_cost") or "0")
@@ -551,11 +670,37 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
                     stripe_pi_id=r.stripe_pi_id,
                     full_card_number=cn, exp_month=d["exp_month"],
                     exp_year=d["exp_year"], cvv=d["cvv"])
-                lines.append("✅ *VALID*\n\\(auth held & released\\)")
-                if r.card_brand:
-                    lines.append(f"💳 {escape_md(r.card_brand)}")
-                if r.bank_name:
-                    lines.append(f"🏦 {escape_md(r.bank_name)}")
+                lines.append("✅ *Card Validated Successfully*")
+                lines.append("")
+                lines.append(f"💳 *Brand:* {escape_md(r.card_brand.title()) if r.card_brand else 'N/A'}")
+                if r.card_funding:
+                    funding_display = r.card_funding.title()
+                    lines.append(f"🏦 *Type:* {escape_md(funding_display)}")
+                if r.card_country:
+                    # Map country code to full name
+                    COUNTRIES = {
+                        "IL": "Israel", "US": "United States", "GB": "United Kingdom",
+                        "CA": "Canada", "AU": "Australia", "DE": "Germany",
+                        "FR": "France", "ES": "Spain", "IT": "Italy",
+                        "NL": "Netherlands", "BE": "Belgium", "SE": "Sweden",
+                        "NO": "Norway", "DK": "Denmark", "FI": "Finland",
+                        "CH": "Switzerland", "AT": "Austria", "IE": "Ireland",
+                        "PT": "Portugal", "PL": "Poland", "CZ": "Czech Republic",
+                        "RO": "Romania", "HU": "Hungary", "GR": "Greece",
+                        "RU": "Russia", "UA": "Ukraine", "TR": "Turkey",
+                        "IN": "India", "CN": "China", "JP": "Japan",
+                        "KR": "South Korea", "SG": "Singapore", "HK": "Hong Kong",
+                        "BR": "Brazil", "MX": "Mexico", "AR": "Argentina",
+                        "AE": "UAE", "SA": "Saudi Arabia", "QA": "Qatar",
+                        "KW": "Kuwait", "BH": "Bahrain", "OM": "Oman",
+                    }
+                    country_name = COUNTRIES.get(r.card_country.upper(), r.card_country)
+                    lines.append(f"🌍 *Origin:* {escape_md(country_name)}")
+                if r.cvc_check:
+                    cvc_status = "✅ Passed" if r.cvc_check == "pass" else "❌ Failed"
+                    lines.append(f"🔒 *CVC Check:* {cvc_status}")
+                lines.append("")
+                lines.append(f"📅 *Expires:* {d['exp_month']}/{d['exp_year']}")
             elif r.status == "declined":
                 ValidationLog.create(
                     user_id=uid, card_bin=d["bin_code"], last4=d["last4"],
@@ -601,7 +746,6 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
     await query.message.edit_text(
         "\n".join(lines), parse_mode="MarkdownV2",
         reply_markup=back_to_user_menu())
-    await query.answer()
 
 
 async def cb_validate_cancel(query: CallbackQuery) -> None:

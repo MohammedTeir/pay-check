@@ -1,0 +1,37 @@
+{
+  "table": "users",
+  "exported_at": "2026-04-06T13:26:46.074253",
+  "record_count": 3,
+  "data": [
+    {
+      "id": 1,
+      "telegram_id": 1151779389,
+      "username": "teirmido",
+      "credits": 100050,
+      "plan_id": 3,
+      "created_at": "2026-04-03T16:55:49.108977+00:00",
+      "last_activity": "2026-04-04T04:36:53.172034+00:00",
+      "is_banned": false
+    },
+    {
+      "id": 3,
+      "telegram_id": 7847783643,
+      "username": "User",
+      "credits": 0,
+      "plan_id": null,
+      "created_at": "2026-04-05T21:12:06.988865+00:00",
+      "last_activity": "2026-04-05T21:12:06.988865+00:00",
+      "is_banned": false
+    },
+    {
+      "id": 2,
+      "telegram_id": 607045320,
+      "username": "k7udair",
+      "credits": 90,
+      "plan_id": null,
+      "created_at": "2026-04-05T20:59:23.270007+00:00",
+      "last_activity": "2026-04-05T20:59:23.270007+00:00",
+      "is_banned": false
+    }
+  ]
+}

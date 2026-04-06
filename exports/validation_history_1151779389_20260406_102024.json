@@ -1,0 +1,192 @@
+{
+  "user": {
+    "telegram_id": 1151779389,
+    "username": "teirmido",
+    "credits": 100000,
+    "created_at": "2026-04-03T16:55:49.108977+00:00"
+  },
+  "validation_history": [
+    {
+      "id": 21,
+      "card_bin": "458052",
+      "last4": "8921",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T21:37:21.292817+00:00"
+    },
+    {
+      "id": 20,
+      "card_bin": "525336",
+      "last4": "2837",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T21:34:11.702200+00:00"
+    },
+    {
+      "id": 19,
+      "card_bin": "525336",
+      "last4": "2837",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T21:30:37.036406+00:00"
+    },
+    {
+      "id": 17,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T19:17:55.013503+00:00"
+    },
+    {
+      "id": 16,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T19:15:41.735668+00:00"
+    },
+    {
+      "id": 15,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T19:10:59.734591+00:00"
+    },
+    {
+      "id": 14,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T17:10:53.795467+00:00"
+    },
+    {
+      "id": 13,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T16:56:11.820510+00:00"
+    },
+    {
+      "id": 12,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T10:01:39.107607+00:00"
+    },
+    {
+      "id": 11,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T08:55:40.619421+00:00"
+    },
+    {
+      "id": 10,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T08:50:29.477007+00:00"
+    },
+    {
+      "id": 9,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T08:40:28.962692+00:00"
+    },
+    {
+      "id": 8,
+      "card_bin": "375154",
+      "last4": "1164",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-05T08:33:55.349549+00:00"
+    },
+    {
+      "id": 7,
+      "card_bin": "539268",
+      "last4": "7980",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T19:25:26.799870+00:00"
+    },
+    {
+      "id": 6,
+      "card_bin": "539268",
+      "last4": "7980",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T15:30:24.297461+00:00"
+    },
+    {
+      "id": 5,
+      "card_bin": "585624",
+      "last4": "7869",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T15:26:52.955364+00:00"
+    },
+    {
+      "id": 4,
+      "card_bin": "585624",
+      "last4": "7869",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T15:26:10.179100+00:00"
+    },
+    {
+      "id": 3,
+      "card_bin": "486871",
+      "last4": "9038",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T15:20:30.456696+00:00"
+    },
+    {
+      "id": 2,
+      "card_bin": "486871",
+      "last4": "9038",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T15:14:44.829155+00:00"
+    },
+    {
+      "id": 1,
+      "card_bin": "486871",
+      "last4": "9038",
+      "status": "bin_check",
+      "decline_code": null,
+      "stripe_pi_id": null,
+      "created_at": "2026-04-04T15:07:26.016116+00:00"
+    }
+  ],
+  "exported_at": "2026-04-06T10:20:24.798469",
+  "total_validations": 20
+}

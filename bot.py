@@ -24,6 +24,7 @@ from middleware.session_timeout import SessionTimeoutMiddleware
 from handlers.admin_handlers import AdminFSM
 from handlers.user_handlers import (
     cmd_start, cmd_menu,
+    cmd_validate, cmd_balance, cmd_quota, cmd_plans, cmd_history, cmd_help,
     cb_u_validate, cb_u_balance, cb_u_plans, cb_u_history, cb_u_help, cb_u_menu, cb_u_quota,
     cb_u_export_history, cb_export_json, cb_export_csv, cb_export_txt,
     handle_card_text, cb_validate_choice, cb_validate_cancel,
@@ -54,6 +55,7 @@ from handlers.admin_handlers import (
     cb_noop,
     handle_admin_text,
 )
+from webapp.app import app as flask_app
 
 # ── Logging setup with rotation ────────────────────────────────────────────
 
@@ -173,9 +175,32 @@ async def handle_text(message: Message, state: FSMContext, bot: Bot) -> None:
     logger.debug(f"Ignoring text from {message.from_user.id}: {message.text[:50]}")
 
 
+async def start_webapp():
+    """Start the Flask webapp for Stripe Elements."""
+    import threading
+    
+    def run_flask():
+        flask_app.run(
+            host='127.0.0.1',
+            port=config.webapp_port,
+            debug=False,
+            use_reloader=False
+        )
+    
+    thread = threading.Thread(target=run_flask, daemon=True)
+    thread.start()
+    logger.info(f"Flask webapp started on port {config.webapp_port}")
+
+
 async def main() -> None:
     config.validate()
     logger.info("Starting Card Validator Bot (aiogram 3.x, inline)...")
+    
+    # Start Flask webapp for Stripe Elements
+    if config.stripe_publishable_key:
+        await start_webapp()
+    else:
+        logger.warning("STRIPE_PUBLISHABLE_KEY not set - Stripe Elements validation disabled")
 
     bot = Bot(token=config.telegram_bot_token)
     dp = Dispatcher(storage=MemoryStorage())
@@ -197,6 +222,13 @@ async def main() -> None:
     dp.message.register(cmd_admin, Command("admin"))
     dp.message.register(lambda m, b: cmd_ping(m, b), Command("ping"))
     dp.message.register(lambda m, b: cmd_health(m, b), Command("health"))
+    # User commands (also as slash commands)
+    dp.message.register(cmd_validate, Command("validate"))
+    dp.message.register(cmd_balance, Command("balance"))
+    dp.message.register(cmd_quota, Command("quota"))
+    dp.message.register(cmd_plans, Command("plans"))
+    dp.message.register(cmd_history, Command("history"))
+    dp.message.register(cmd_help, Command("help"))
 
     # ── Callback: User ────────────────────────────────────────────────
     dp.callback_query.register(cb_u_validate, F.data == "u_validate")

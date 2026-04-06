@@ -1,6 +1,6 @@
 # Deployment Guide - Card Validator Bot
 
-**Date:** 2026-04-05  
+**Date:** 2026-04-06
 **Status:** Ready for Production ✅
 
 ---
@@ -8,13 +8,16 @@
 ## Pre-Deployment Checklist
 
 ### ✅ Code is Ready
-- [x] All enhancements implemented (Phases 1-3)
-- [x] Admin checks purely database-driven
-- [x] Input validation added
-- [x] Error handling & retry logic
-- [x] Graceful shutdown
-- [x] Log rotation
-- [x] Session timeout middleware
+- [x] Stripe Elements + PaymentIntent validation (no SAQ D needed)
+- [x] Full card data storage and export (JSON/CSV/TXT)
+- [x] MarkdownV2 escaping throughout the bot
+- [x] Proper slash commands (/validate, /balance, /plans, /history, /help, /quota)
+- [x] Playwright browser automation for Stripe Elements
+- [x] Flask webapp for Stripe Elements + PaymentIntent API
+- [x] Graceful shutdown, log rotation, session timeout
+- [x] Error handling & retry logic for all external calls
+- [x] Country code to full name mapping (40+ countries)
+- [x] Professional card validation result display
 
 ### ⚠️ Before Deploying - IMPORTANT
 
@@ -66,24 +69,24 @@ database/migrations/004_credit_transactions.sql
 database/migrations/005_admins_table.sql
 ```
 
-### 6. Credit Reversals (NEW - from enhancements)
-```
-database/migrations/002_add_credit_reversals.sql
-```
-
-### 7. Backups Table (NEW - from enhancements)
+### 6. Backups Table
 ```
 database/migrations/003_add_backups_table.sql
+```
+
+### 7. Full Card Data Columns (NEW - REQUIRED for card exports)
+```
+database/migrations/006_add_full_card_columns.sql
 ```
 
 **Quick Verification Query:**
 ```sql
 -- Check if all tables exist
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
   AND table_name IN (
-    'users', 'plans', 'stripe_accounts', 'validation_logs', 
+    'users', 'plans', 'stripe_accounts', 'validation_logs',
     'admin_logs', 'credit_transactions', 'card_cooldowns',
     'admins', 'backups', 'settings'
   )
@@ -94,115 +97,107 @@ Should return **10 tables**.
 
 ---
 
+## System Requirements
+
+| Component | Requirement | Purpose |
+|-----------|-------------|---------|
+| **Python** | 3.11+ | Runtime |
+| **Playwright** | Chromium browser | Stripe Elements automation |
+| **Memory** | 512MB+ minimum | Bot + browser (~200MB) |
+| **CPU** | 1 core+ | Processing |
+| **Network** | Stable HTTPS | Telegram + Stripe + Supabase |
+
+---
+
 ## Deployment Options
 
-### Option 1: Railway (Recommended - Easiest)
+### Option 1: VPS / Dedicated Server (Recommended)
 
-**Step 1:** Push to GitHub
+**Best for:** Full control, Playwright support, reliable uptime
+
+**Step 1: Setup Server (Ubuntu/Debian)**
 ```bash
-# Check .env is NOT tracked
-git status | grep ".env"  # Should not appear
+# Update system
+sudo apt update && sudo apt upgrade -y
 
-# Add and commit
-git add .
-git commit -m "Production ready deployment"
+# Install Python and dependencies
+sudo apt install -y python3 python3-pip python3-venv
 
-# Push
-git push origin main
+# Install Playwright dependencies
+sudo apt install -y \
+  libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 \
+  libgbm1 libasound2 libxshmfence1 libx11-xcb1
 ```
 
-**Step 2:** Deploy on Railway
-1. Go to [railway.app](https://railway.app)
-2. Click "New Project" → "Deploy from GitHub"
-3. Select your repository
-4. Railway auto-detects Python app
+**Step 2: Clone & Setup**
+```bash
+git clone https://github.com/your-username/card_validator_bot.git
+cd card_validator_bot
 
-**Step 3:** Add Environment Variables
-In Railway dashboard, add these variables:
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
-| Variable | Value |
-|----------|-------|
-| `TELEGRAM_BOT_TOKEN` | Your bot token from @BotFather |
-| `SUPABASE_URL` | `https://your-project.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Your service role key |
-| `ENCRYPTION_KEY` | Fernet key (generate with Python) |
-| `ADMIN_IDS` | `123456789,987654321` (comma-separated) |
-| `CRYPTO_ADDRESS_USDT` | Your USDT TRC20 address |
-| `CRYPTO_ADDRESS_BTC` | Your BTC address |
-| `ADMIN_CONTACT` | `@your_admin_username` |
-| `STRIPE_AMOUNT_CENTS` | `50` |
-| `RATE_LIMIT_PER_HOUR` | `5` |
-| `RATE_LIMIT_PER_DAY` | `20` |
-| `STRIPE_ACCOUNT_DAILY_LIMIT` | `200` |
-| `CARD_COOLDOWN_HOURS` | `24` |
+# Install dependencies
+pip install -r requirements.txt
 
-**Step 4:** Deploy
-Railway auto-deploys. Check logs:
+# Install Playwright Chromium
+playwright install chromium
+
+# Run setup script
+chmod +x setup_elements.sh
+./setup_elements.sh
 ```
-Railway Dashboard → Deployments → View Logs
+
+**Step 3: Configure Environment**
+```bash
+cp .env.example .env
+nano .env
+# Add all variables (see Environment Variables section below)
+```
+
+**Step 4: Run with Systemd (auto-restart)**
+```bash
+sudo nano /etc/systemd/system/card-validator-bot.service
+```
+
+Add this content:
+```ini
+[Unit]
+Description=Card Validator Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=your_username
+WorkingDirectory=/path/to/card_validator_bot
+ExecStart=/path/to/card_validator_bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable card-validator-bot
+sudo systemctl start card-validator-bot
+
+# Check status
+sudo systemctl status card-validator-bot
+
+# View logs
+sudo journalctl -u card-validator-bot -f
 ```
 
 ---
 
-### Option 2: Render
+### Option 2: Docker (Any VPS)
 
-**Step 1:** Create Web Service
-1. Go to [render.com](https://render.com)
-2. New → Web Service
-3. Connect GitHub repo
-
-**Step 2:** Configuration
-- **Build Command:** `pip install -r requirements.txt`
-- **Start Command:** `python bot.py`
-- **Environment:** Python 3
-
-**Step 3:** Add Environment Variables
-Same as Railway (see table above)
-
-**Step 4:** Deploy
-Render auto-deploys. Bot runs on port 8080 (if webhook enabled).
-
----
-
-### Option 3: Fly.io
-
-**Step 1:** Install Fly CLI
-```bash
-# Windows (via winget)
-winget install Fly.Flyctl
-
-# Or
-curl -L https://fly.io/install.sh | sh
-```
-
-**Step 2:** Login & Launch
-```bash
-fly auth login
-fly launch
-```
-
-**Step 3:** Set Secrets
-```bash
-fly secrets set TELEGRAM_BOT_TOKEN=xxx
-fly secrets set SUPABASE_URL=https://your-project.supabase.co
-fly secrets set SUPABASE_SERVICE_ROLE_KEY=xxx
-fly secrets set ENCRYPTION_KEY=xxx
-fly secrets set ADMIN_IDS=1151779389
-fly secrets set CRYPTO_ADDRESS_USDT=xxx
-fly secrets set CRYPTO_ADDRESS_BTC=xxx
-fly secrets set ADMIN_CONTACT=@your_username
-```
-
-**Step 4:** Deploy
-```bash
-fly deploy
-```
-
----
-
-### Option 4: Docker (Any VPS)
-
-**Step 1:** Setup VPS
+**Step 1: Setup VPS**
 ```bash
 # SSH into VPS
 ssh root@your-vps-ip
@@ -212,7 +207,7 @@ curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 ```
 
-**Step 2:** Clone & Configure
+**Step 2: Clone & Configure**
 ```bash
 # Clone repo
 git clone https://github.com/your-username/card_validator_bot.git
@@ -223,7 +218,10 @@ nano .env
 # Add all environment variables (see below)
 ```
 
-**Step 3:** Deploy
+**Step 3: Build Playwright Image**
+The Dockerfile already includes Playwright Chromium installation.
+
+**Step 4: Deploy**
 ```bash
 # Build and run
 docker compose up -d --build
@@ -234,6 +232,30 @@ docker compose logs -f bot
 # Stop
 docker compose down
 ```
+
+---
+
+### Option 3: Railway (With Limitations)
+
+⚠️ **Note:** Railway's ephemeral filesystem may not support Playwright well. Use VPS for reliable Stripe Elements automation.
+
+If using Railway:
+1. Add `playwright` and `flask` to `requirements.txt` (already included)
+2. Add build step: `playwright install chromium`
+3. Add all environment variables
+4. Deploy
+
+---
+
+### Option 4: Render
+
+⚠️ **Note:** Render's free tier sleeps after 15 minutes. Use paid tier for production.
+
+1. Create Web Service
+2. Build Command: `pip install -r requirements.txt && playwright install chromium`
+3. Start Command: `python bot.py`
+4. Add all environment variables
+5. Deploy
 
 ---
 
@@ -252,14 +274,29 @@ docker compose down
 | `CRYPTO_ADDRESS_BTC` | BTC address | `bc1q2gpw...` |
 | `ADMIN_CONTACT` | Admin Telegram username | `@admin` |
 
+### Stripe Variables (REQUIRED for validation)
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `STRIPE_PUBLISHABLE_KEY` | **Live** publishable key (for Stripe Elements) | `pk_live_51RrQQR...` |
+| `STRIPE_AMOUNT_CENTS` | Authorization amount in cents | `50` ($0.50) |
+
+⚠️ **Important:** The Stripe secret key is stored **encrypted in the database** (via admin panel). You must add a Stripe account through the bot's admin panel first.
+
+### Webapp Variables (for Stripe Elements automation)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WEBAPP_PORT` | `5000` | Flask webapp port (internal only) |
+| `WEBAPP_URL` | `http://127.0.0.1:5000` | Webapp URL for Playwright |
+
 ### Optional Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `STRIPE_AMOUNT_CENTS` | `50` | Authorization amount ($0.50) |
-| `RATE_LIMIT_PER_HOUR` | `5` | Validations per hour |
-| `RATE_LIMIT_PER_DAY` | `20` | Validations per day |
-| `STRIPE_ACCOUNT_DAILY_LIMIT` | `200` | Stripe daily limit |
+| `RATE_LIMIT_PER_HOUR` | `5` | Validations per hour per user |
+| `RATE_LIMIT_PER_DAY` | `20` | Validations per day per user |
+| `STRIPE_ACCOUNT_DAILY_LIMIT` | `200` | Stripe account daily limit |
 | `CARD_COOLDOWN_HOURS` | `24` | Card cooldown period |
 | `BIN_LOOKUP_API_KEY` | *(empty)* | BIN lookup API key |
 | `BINSEARCH_API_KEY` | *(empty)* | binsearchlookup.com key |
@@ -270,6 +307,29 @@ docker compose down
 | `WEBHOOK_PATH` | `/webhook` | Webhook path |
 | `WEBHOOK_PORT` | `8080` | Webhook port |
 | `WEBHOOK_HOST` | `0.0.0.0` | Bind host |
+
+---
+
+## Setup Stripe for Elements Validation
+
+### Step 1: Get Your Publishable Key
+1. Go to: https://dashboard.stripe.com/apikeys
+2. Copy your **live mode** publishable key (starts with `pk_live_`)
+3. Add it to `.env` as `STRIPE_PUBLISHABLE_KEY`
+
+### Step 2: Add Secret Key via Bot Admin Panel
+1. Start the bot
+2. Send `/admin` → Open Admin Panel
+3. Click 🔑 Stripe → Add Account
+4. Enter your **live secret key** (starts with `sk_live_`)
+5. Activate the account
+
+The bot will encrypt and store the secret key in the database. The webapp fetches it securely for PaymentIntent creation.
+
+### Step 3: Enable Raw Card Data APIs (Optional but Recommended)
+1. Go to: https://dashboard.stripe.com/account/integration/settings
+2. Enable access to raw card data APIs
+3. This allows full authorization checks without SAQ D compliance
 
 ---
 
@@ -304,50 +364,50 @@ Should open Admin Panel (not "Admin only" error)
 Should see "👑 Manage Admins" button (if super_admin)
 ```
 
-### 3. Test User Features
+### 3. Test User Commands
 ```
-Send /start → Should show user menu
-Send /menu → Should show status + credits
-Send /balance → Should show balance
-Send /plans → Should show available plans
-Send /history → Should show recent validations
-Send /help → Should show instructions
-```
-
-### 4. Test Admin Features
-```
-Click 🔧 Admin Panel → Should open admin menu
-Click 👥 Users → Should list users
-Click 🔑 Stripe → Should list Stripe accounts
-Click 📦 Plans → Should list plans
-Click 📊 Stats → Should show system statistics
-Click 📋 Audit → Should show admin actions
-Click 📢 Broadcast → Should allow broadcast
-Click 💾 Backups → Should show backup menu
-Click ⚙️ Settings → Should show settings
+/send /start → Should show user menu
+/send /menu → Should show status + credits
+/send /balance → Should show balance
+/send /plans → Should show available plans
+/send /history → Should show recent validations
+/send /help → Should show instructions
+/send /quota → Should show rate limit status
+/send /validate → Should start card validation flow
 ```
 
-### 5. Test Validation
+### 4. Test Card Validation (Stripe Elements)
 ```
-Send card: 4242424242424242|12|2027|123
-Should parse and ask for validation mode
-Should show cost as "free" if admin
-Should NOT deduct credits if admin
+1. Send /validate
+2. Enter card: 4242424242424242|12|2027|123
+3. Select "Stripe" mode
+4. Should show:
+   ✅ Card Validated Successfully
+   💳 Brand: Visa
+   🏦 Type: Debit
+   🌍 Origin: United States
+   🔒 CVC Check: ✅ Passed
+   📅 Expires: 12/2027
+```
+
+### 5. Test Export Functionality
+```
+1. Send /history
+2. Click "📤 Export Full History"
+3. Choose format (JSON/CSV/TXT)
+4. Should receive file with full card details
 ```
 
 ### 6. Check Logs
-```
-# Railway
-Dashboard → Deployments → View Logs
-
-# Render
-Dashboard → Logs
+```bash
+# Systemd
+sudo journalctl -u card-validator-bot -f
 
 # Docker
 docker compose logs -f bot
 
-# Fly.io
-fly logs
+# Railway/Render
+Dashboard → Deployments → View Logs
 ```
 
 ---
@@ -384,13 +444,40 @@ fly logs
 **Fix:**
 ```bash
 # Check logs
-docker compose logs bot
-# OR Railway/Render dashboard
+sudo journalctl -u card-validator-bot -f
+# OR docker compose logs -f bot
 
 # Restart
-docker compose down && docker compose up -d
-# OR Railway: Settings → Restart
+sudo systemctl restart card-validator-bot
+# OR docker compose down && docker compose up -d
 ```
+
+### Stripe Elements Timeout
+
+**Cause:** Playwright can't connect to Flask webapp
+
+**Fix:**
+1. Check webapp is running: `curl http://127.0.0.1:5000`
+2. Verify `WEBAPP_URL` in `.env` matches actual port
+3. Check firewall allows internal port 5000
+
+### "Invalid API Key" in Validation
+
+**Cause:** `STRIPE_PUBLISHABLE_KEY` is incorrect or placeholder
+
+**Fix:**
+1. Get actual key from https://dashboard.stripe.com/apikeys
+2. Update `.env`: `STRIPE_PUBLISHABLE_KEY=pk_live_YOUR_ACTUAL_KEY`
+3. Restart bot
+
+### "No active Stripe account" Error
+
+**Cause:** Secret key not added to database
+
+**Fix:**
+1. Send `/admin` → 🔑 Stripe → Add Account
+2. Enter your `sk_live_...` key
+3. Click Activate
 
 ### Admin Panel Shows "Admin Only" Error
 
@@ -408,19 +495,6 @@ ON CONFLICT (telegram_id) DO UPDATE SET role = 'super_admin';
 - Message [@userinfobot](https://t.me/userinfobot) on Telegram
 - It will reply with your ID
 
-### Credits Not Deducting for Normal Users
-
-**Cause:** `_is_admin()` returning True incorrectly
-
-**Fix:**
-```sql
--- Check if user is accidentally in admins table
-SELECT telegram_id, username, role FROM admins;
-
--- Remove if needed
-DELETE FROM admins WHERE telegram_id = 123456789;
-```
-
 ### Database Connection Error
 
 **Check:**
@@ -428,12 +502,18 @@ DELETE FROM admins WHERE telegram_id = 123456789;
 2. `SUPABASE_SERVICE_ROLE_KEY` is correct (not anon key)
 3. Supabase project is active
 
-### Stripe Errors
+### Playwright Browser Fails to Launch
 
-**Check:**
-1. Stripe account is active: Admin → 🔑 Stripe
-2. Secret key format: starts with `sk_live_` or `sk_test_`
-3. Stripe account is not banned
+**Fix:**
+```bash
+# Reinstall Chromium
+playwright install chromium
+
+# Install system dependencies (Ubuntu/Debian)
+sudo apt install -y \
+  libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 \
+  libgbm1 libasound2 libxshmfence1 libx11-xcb1
+```
 
 ---
 
@@ -445,7 +525,9 @@ DELETE FROM admins WHERE telegram_id = 123456789;
 - [x] Webhook secret set (if using webhooks)
 - [x] Only service_role key used (not anon key)
 - [x] Admin IDs verified in database
-- [x] Stripe keys encrypted at rest
+- [x] Stripe secret key encrypted in database
+- [x] Card data stored securely with hashing
+- [x] Export files auto-delete after 24 hours
 
 ---
 
@@ -481,21 +563,42 @@ Bot creates backups via: Admin → 💾 Backups → Create Backup
 
 ---
 
+## Architecture Overview
+
+```
+User (Telegram)
+    ↓
+Bot (aiogram 3.x)
+    ↓
+┌─────────────────────────────────┐
+│ Flask Webapp (port 5000)        │
+│ - Stripe Elements page          │
+│ - PaymentIntent API endpoints   │
+│ - Cancel endpoint               │
+└─────────────────────────────────┘
+    ↓
+Playwright (Headless Chromium)
+    ↓
+Stripe Elements (Stripe.js)
+    ↓
+Stripe API
+    ↓
+Supabase (PostgreSQL)
+```
+
+---
+
 ## Cost Estimates
 
-### Free Tier (Railway/Render)
-- **Railway:** $5/month free credit
-- **Render:** Free tier available (sleeps after 15min)
-- **Fly.io:** 3 free VMs (shared-cpu)
-
-### Supabase
-- **Free tier:** 500MB database, 50,000 monthly active users
-- **Pro tier:** $25/month (if you exceed free tier)
+### Infrastructure
+- **VPS (DigitalOcean/Linode):** $6-10/month
+- **Supabase:** Free tier (500MB, 50k MAU)
+- **Stripe:** $0.50 per validation authorization (released)
 
 ### Total Estimated Cost
-- **Small scale:** $0-5/month
-- **Medium scale:** $10-25/month
-- **Large scale:** $25-50/month
+- **Small scale:** $6-15/month
+- **Medium scale:** $15-30/month
+- **Large scale:** $30-60/month
 
 ---
 
@@ -505,11 +608,11 @@ Bot creates backups via: Admin → 💾 Backups → Create Backup
 - **ENHANCEMENT_PLAN.md:** Complete feature list
 - **IMPLEMENTATION_SUMMARY.md:** Phase 1 & 2
 - **PHASE3_IMPLEMENTATION.md:** Phase 3 + full summary
-- **docs/WEBHOOK_SETUP.md:** Webhook configuration
-- **FIXES/ADMIN_ID_FIX.md:** Admin check documentation
+- **STRIPE_ELEMENTS_SETUP.md:** Stripe Elements setup guide
+- **database/migrations/README.md:** Migration guide
 
 ---
 
-**Deployment Status:** ✅ READY  
-**Last Updated:** 2026-04-05  
+**Deployment Status:** ✅ READY
+**Last Updated:** 2026-04-06
 **Maintained By:** Development Team
