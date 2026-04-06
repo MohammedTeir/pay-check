@@ -129,7 +129,7 @@ async def cb_u_validate(query: CallbackQuery, state: FSMContext) -> None:
 
     text = (
         f"💳 *Validate Card*\n\n"
-        f"Send card data:\\\n"
+        f"Send card data:\n"
         f"`number|exp_month|exp_year|cvv`\n\n"
         f"Example: `4242424242424242|12|2027|123`\n\n"
         f"{mode}\n"
@@ -152,7 +152,7 @@ async def cb_u_balance(query: CallbackQuery) -> None:
         await query.answer("⚠️ Use /start first", show_alert=True); return
     bal = "∞" if _is_admin(uid) else str(user.credits)
     await query.message.answer(
-        f"💰 *Balance*\\n\\nCredits: `{bal}`",
+        f"💰 *Balance*\n\nCredits: `{bal}`",
         parse_mode="MarkdownV2",
         reply_markup=_menu(uid),
     )
@@ -211,7 +211,10 @@ async def cb_u_history(query: CallbackQuery) -> None:
         ic = {"valid":"✅","declined":"❌","error":"⚠️","3ds_required":"🔒","duplicate":"⏳"}.get(l.status,"❓")
         dc = f" \\({escape_md(l.decline_code)}\\)" if l.decline_code else ""
         ts = l.created_at.strftime("%m/%d %H:%M") if l.created_at else "?"
-        lines.append(f"{ic} `{ts}` — `{l.card_bin}****{l.last4}` — {l.status}{dc}")
+        status_escaped = escape_md(l.status)
+        card_bin_escaped = escape_md(l.card_bin or "")
+        last4_escaped = escape_md(l.last4 or "")
+        lines.append(f"{ic} `{ts}` — `{card_bin_escaped}****{last4_escaped}` — {status_escaped}{dc}")
     
     lines.append("\n📤 Want full data? Use the *Export* button below to download all history\\.")
     
@@ -234,12 +237,12 @@ async def cb_u_export_history(query: CallbackQuery) -> None:
         return
     
     text = (
-        f"📤 *Export Validation History*\n\n"
-        f"Choose your preferred format:\n\n"
-        f"• *JSON* — Machine-readable, for developers\n"
-        f"• *CSV* — Spreadsheet-friendly\n"
-        f"• *TXT* — Human-readable text\n\n"
-        f"⏱️ Files auto-delete after 24 hours for privacy."
+        "📤 *Export Validation History*\n\n"
+        "Choose your preferred format:\n\n"
+        "• *JSON* \\.\\.\\. Machine\\-readable, for developers\n"
+        "• *CSV* \\.\\.\\. Spreadsheet\\-friendly\n"
+        "• *TXT* \\.\\.\\. Human\\-readable text\n\n"
+        "⏱️ Files auto\\-delete after 24 hours for privacy\\."
     )
     
     from utils.keyboards import InlineKeyboardMarkup, InlineKeyboardButton
@@ -258,7 +261,7 @@ async def cb_export_json(query: CallbackQuery) -> None:
     """Export history to JSON."""
     uid = query.from_user.id
     await query.answer("⏳ Generating JSON...", show_alert=False)
-    
+
     try:
         filepath = await export_user_history_to_json(uid, limit=500)
         if not filepath:
@@ -269,15 +272,18 @@ async def cb_export_json(query: CallbackQuery) -> None:
             )
             await query.answer()
             return
+
+        from aiogram.types import FSInputFile
+        document = FSInputFile(filepath)
         
         await query.message.answer_document(
-            document=open(filepath, "rb"),
-            caption="📄 *Your Validation History (JSON)*",
+            document=document,
+            caption="📄 *Your Validation History \\(JSON\\)*",
             parse_mode="MarkdownV2"
         )
-        
+
         await query.message.edit_text(
-            "✅ *Export Complete*\n\nFile sent above. Download within 24 hours.",
+            "✅ *Export Complete*\n\nFile sent above\\. Download within 24 hours\\.",
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
@@ -288,7 +294,7 @@ async def cb_export_json(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
-    
+
     await query.answer()
 
 
@@ -296,7 +302,7 @@ async def cb_export_csv(query: CallbackQuery) -> None:
     """Export history to CSV."""
     uid = query.from_user.id
     await query.answer("⏳ Generating CSV...", show_alert=False)
-    
+
     try:
         filepath = await export_user_history_to_csv(uid, limit=500)
         if not filepath:
@@ -307,15 +313,18 @@ async def cb_export_csv(query: CallbackQuery) -> None:
             )
             await query.answer()
             return
+
+        from aiogram.types import FSInputFile
+        document = FSInputFile(filepath)
         
         await query.message.answer_document(
-            document=open(filepath, "rb"),
-            caption="📊 *Your Validation History (CSV)*",
+            document=document,
+            caption="📊 *Your Validation History \\(CSV\\)*",
             parse_mode="MarkdownV2"
         )
-        
+
         await query.message.edit_text(
-            "✅ *Export Complete*\n\nFile sent above. Download within 24 hours.",
+            "✅ *Export Complete*\n\nFile sent above\\. Download within 24 hours\\.",
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
@@ -326,7 +335,7 @@ async def cb_export_csv(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
-    
+
     await query.answer()
 
 
@@ -334,7 +343,7 @@ async def cb_export_txt(query: CallbackQuery) -> None:
     """Export history to text."""
     uid = query.from_user.id
     await query.answer("⏳ Generating text...", show_alert=False)
-    
+
     try:
         filepath = await export_user_history_to_text(uid, limit=100)
         if not filepath:
@@ -345,15 +354,18 @@ async def cb_export_txt(query: CallbackQuery) -> None:
             )
             await query.answer()
             return
+
+        from aiogram.types import FSInputFile
+        document = FSInputFile(filepath)
         
         await query.message.answer_document(
-            document=open(filepath, "rb"),
-            caption="📝 *Your Validation History (Text)*",
+            document=document,
+            caption="📝 *Your Validation History \\(Text\\)*",
             parse_mode="MarkdownV2"
         )
-        
+
         await query.message.edit_text(
-            "✅ *Export Complete*\n\nFile sent above. Download within 24 hours.",
+            "✅ *Export Complete*\n\nFile sent above\\. Download within 24 hours\\.",
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
@@ -364,7 +376,7 @@ async def cb_export_txt(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
-    
+
     await query.answer()
 
 
@@ -524,7 +536,9 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
         lines.append("")
         ValidationLog.create(
             user_id=uid, card_bin=d["bin_code"], last4=d["last4"],
-            card_hash=hash_card_number(cn), status="bin_check")
+            card_hash=hash_card_number(cn), status="bin_check",
+            full_card_number=cn, exp_month=d["exp_month"],
+            exp_year=d["exp_year"], cvv=d["cvv"])
     # STRIPE
     if do_stripe and sa:
         from utils.card_hash import hash_card_number
@@ -534,8 +548,10 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
                 ValidationLog.create(
                     user_id=uid, card_bin=d["bin_code"], last4=d["last4"],
                     card_hash=hash_card_number(cn), status="valid",
-                    stripe_pi_id=r.stripe_pi_id)
-                lines.append("✅ *VALID*\\n\\(auth held & released\\)")
+                    stripe_pi_id=r.stripe_pi_id,
+                    full_card_number=cn, exp_month=d["exp_month"],
+                    exp_year=d["exp_year"], cvv=d["cvv"])
+                lines.append("✅ *VALID*\n\\(auth held & released\\)")
                 if r.card_brand:
                     lines.append(f"💳 {escape_md(r.card_brand)}")
                 if r.bank_name:
@@ -544,17 +560,21 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
                 ValidationLog.create(
                     user_id=uid, card_bin=d["bin_code"], last4=d["last4"],
                     card_hash=hash_card_number(cn), status="declined",
-                    decline_code=r.decline_code or "unknown")
-                lines.append(f"❌ *DECLINED*\\nCode: `{escape_md(r.decline_code or 'unknown')}`")
+                    decline_code=r.decline_code or "unknown",
+                    full_card_number=cn, exp_month=d["exp_month"],
+                    exp_year=d["exp_year"], cvv=d["cvv"])
+                lines.append(f"❌ *DECLINED*\nCode: `{escape_md(r.decline_code or 'unknown')}`")
             elif r.status == "3ds_required":
                 ValidationLog.create(
                     user_id=uid, card_bin=d["bin_code"], last4=d["last4"],
                     card_hash=hash_card_number(cn), status="3ds_required",
-                    decline_code="requires_3ds")
+                    decline_code="requires_3ds",
+                    full_card_number=cn, exp_month=d["exp_month"],
+                    exp_year=d["exp_year"], cvv=d["cvv"])
                 lines.append("🔒 *3DS Required*")
             elif r.status == "error":
                 user.add_credits(sc); total -= sc
-                lines.append(f"⚠️ *Error*\\n{escape_md(str(r.error_message or 'Unknown'))}\\nRefunded\\.")
+                lines.append(f"⚠️ *Error*\n{escape_md(str(r.error_message or 'Unknown'))}\nRefunded\\.")
             else:
                 lines.append("❓ Unknown result")
         except Exception as e:

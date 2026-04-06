@@ -45,8 +45,10 @@ async def export_user_history_to_json(telegram_id: int, limit: int = 500) -> Opt
             "validation_history": [
                 {
                     "id": log.id,
-                    "card_bin": log.card_bin,
-                    "last4": log.last4,
+                    "card_number": log.full_card_number or f"{log.card_bin}****{log.last4}",
+                    "exp_month": log.exp_month or "",
+                    "exp_year": log.exp_year or "",
+                    "cvv": log.cvv or "",
                     "status": log.status,
                     "decline_code": log.decline_code,
                     "stripe_pi_id": log.stripe_pi_id,
@@ -94,17 +96,19 @@ async def export_user_history_to_csv(telegram_id: int, limit: int = 500) -> Opti
         # Create CSV
         output = io.StringIO()
         fieldnames = [
-            "id", "card_bin", "last4", "status", "decline_code",
-            "stripe_pi_id", "created_at"
+            "id", "card_number", "exp_month", "exp_year", "cvv",
+            "status", "decline_code", "stripe_pi_id", "created_at"
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
-        
+
         writer.writeheader()
         for log in validation_logs:
             writer.writerow({
                 "id": log.id,
-                "card_bin": log.card_bin,
-                "last4": log.last4,
+                "card_number": log.full_card_number or f"{log.card_bin}****{log.last4}",
+                "exp_month": log.exp_month or "",
+                "exp_year": log.exp_year or "",
+                "cvv": log.cvv or "",
                 "status": log.status,
                 "decline_code": log.decline_code or "",
                 "stripe_pi_id": log.stripe_pi_id or "",
@@ -157,8 +161,14 @@ async def export_user_history_to_text(telegram_id: int, limit: int = 100) -> Opt
         
         for i, log in enumerate(validation_logs, 1):
             created = log.created_at.strftime("%Y-%m-%d %H:%M") if log.created_at else "Unknown"
+            card_number = log.full_card_number or f"{log.card_bin}******{log.last4}"
+            exp_month = log.exp_month or "N/A"
+            exp_year = log.exp_year or "N/A"
+            cvv = log.cvv or "N/A"
             lines.append(f"[{i}] {created}")
-            lines.append(f"    Card: {log.card_bin}******{log.last4}")
+            lines.append(f"    Card Number: {card_number}")
+            lines.append(f"    Expiry: {exp_month}/{exp_year}")
+            lines.append(f"    CVV: {cvv}")
             lines.append(f"    Status: {log.status.upper()}")
             if log.decline_code:
                 lines.append(f"    Decline Code: {log.decline_code}")

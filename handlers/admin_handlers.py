@@ -467,20 +467,27 @@ async def cb_user_reverse_ok(query: CallbackQuery) -> None:
 async def cb_a_backups(query: CallbackQuery) -> None:
     """Show backup management menu."""
     from services.backup_service import list_backups, format_backup_summary
+
+    try:
+        backups = await list_backups(limit=5)
+    except Exception as e:
+        backups = []
     
-    backups = await list_backups(limit=5)
     text = "💾 *Backup Management*\n\n"
-    text += "Create and manage database backups.\n"
-    text += "Backups are stored in the database for easy restoration.\n\n"
-    
+    text += "Create and manage database backups\\.\n"
+    text += "Backups are stored in the database for easy restoration\\.\n\n"
+
     if backups:
         latest = backups[0]
         created = latest.get("created_at", "Unknown")[:19].replace("T", " ")
         metadata = latest.get("metadata", {})
-        text += f"*Latest Backup:* `{latest.get('backup_id', 'N/A')}`\n"
+        text += f"*Latest Backup:* `{escape_md(str(latest.get('backup_id', 'N/A')))}`\n"
         text += f"📅 {escape_md(created)}\n"
-        text += f"📊 {metadata.get('total_records', 0)} records\n"
-    
+        text += f"📊 {escape_md(str(metadata.get('total_records', 0)))} records\n"
+    else:
+        text += "📭 *No backups yet\\.*\n"
+        text += "Tap the button below to create your first backup\\."
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💾 Create Backup Now", callback_data="backup_create")],
         [InlineKeyboardButton(text="📋 List All Backups", callback_data="backup_list")],
@@ -488,7 +495,7 @@ async def cb_a_backups(query: CallbackQuery) -> None:
         [InlineKeyboardButton(text="📤 Export Users (CSV)", callback_data="backup_export_users_csv")],
         [InlineKeyboardButton(text="🔙 Admin Panel", callback_data="a_main")],
     ])
-    
+
     await query.message.edit_text(text, parse_mode="MarkdownV2", reply_markup=kb)
     await query.answer()
 
@@ -509,11 +516,11 @@ async def cb_backup_create(query: CallbackQuery) -> None:
         
         text = (
             f"✅ *Backup Created Successfully*\n\n"
-            f"ID: `{metadata.get('backup_id')}`\n"
-            f"📅 {metadata.get('created_at', '')[:19].replace('T', ' ')}\n"
-            f"📊 {metadata.get('total_records')} records\n"
-            f"📁 {metadata.get('table_count')} tables\n\n"
-            f"Backup stored safely in database."
+            f"ID: `{escape_md(str(metadata.get('backup_id', '')))}`\n"
+            f"📅 {escape_md(metadata.get('created_at', '')[:19].replace('T', ' '))}\n"
+            f"📊 {escape_md(str(metadata.get('total_records', 0)))} records\n"
+            f"📁 {escape_md(str(metadata.get('table_count', 0)))} tables\n\n"
+            f"Backup stored safely in database\\."
         )
         
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -575,13 +582,16 @@ async def cb_backup_export_users_json(query: CallbackQuery) -> None:
         })
         
         # Send file to admin
-        await query.message.answer_document(
-            document=open(filepath, "rb"),
-            caption=f"📤 *Users Export (JSON)*\n\nFile: `{filename}`"
-        )
+        from aiogram.types import FSInputFile
+        document = FSInputFile(filepath)
         
+        await query.message.answer_document(
+            document=document,
+            caption=f"📤 *Users Export \\(JSON\\)*\n\nFile: `{escape_md(filename)}`"
+        )
+
         await query.message.edit_text(
-            f"✅ *Export Complete*\n\nFile sent above.",
+            f"✅ *Export Complete*\n\nFile sent above\\.",
             parse_mode="MarkdownV2",
             reply_markup=back_to_admin_panel()
         )
@@ -623,13 +633,16 @@ async def cb_backup_export_users_csv(query: CallbackQuery) -> None:
         })
         
         # Send file to admin
-        await query.message.answer_document(
-            document=open(filepath, "rb"),
-            caption=f"📤 *Users Export (CSV)*\n\nFile: `{filename}`"
-        )
+        from aiogram.types import FSInputFile
+        document = FSInputFile(filepath)
         
+        await query.message.answer_document(
+            document=document,
+            caption=f"📤 *Users Export \\(CSV\\)*\n\nFile: `{escape_md(filename)}`"
+        )
+
         await query.message.edit_text(
-            f"✅ *Export Complete*\n\nFile sent above.",
+            f"✅ *Export Complete*\n\nFile sent above\\.",
             parse_mode="MarkdownV2",
             reply_markup=back_to_admin_panel()
         )

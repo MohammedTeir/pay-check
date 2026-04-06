@@ -98,9 +98,11 @@ async def list_backups(limit: int = 20) -> list[dict]:
             .limit(limit)
             .execute()
         )
-        return response.data
+        logger.info(f"Supabase list_backups response: {type(response)}")
+        logger.info(f"Response data: {response.data if hasattr(response, 'data') else 'NO DATA ATTR'}")
+        return response.data if response.data else []
     except Exception as e:
-        logger.error(f"Failed to list backups: {e}")
+        logger.error(f"Failed to list backups: {e}", exc_info=True)
         return []
 
 
@@ -314,20 +316,20 @@ async def restore_backup(backup_id: str) -> dict:
 def format_backup_summary(backups: list[dict]) -> str:
     """Format backup list for Telegram message."""
     if not backups:
-        return "📭 *No backups found*"
-    
+        return "📭 *No backups found\\.*"
+
     lines = ["💾 *Database Backups*\n"]
-    
+
     for i, backup in enumerate(backups[:10], 1):
         metadata = backup.get("metadata", {})
         created = backup.get("created_at", "Unknown")[:19].replace("T", " ")
         total_records = metadata.get("total_records", 0)
-        backup_id = backup.get("backup_id", "Unknown")
-        
+        backup_id = escape_md(str(backup.get("backup_id", "Unknown")))
+
         lines.append(
             f"*{i}\\.* `{backup_id}`\n"
             f"   📅 {escape_md(created)}\n"
-            f"   📊 {total_records} records\n"
+            f"   📊 {escape_md(str(total_records))} records\n"
         )
-    
+
     return "\n".join(lines)

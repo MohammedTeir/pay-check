@@ -29,6 +29,11 @@ class StripeAccount:
         self.daily_reset_at = daily_reset_at
         self.created_at = created_at
 
+    @property
+    def secret_key_encrypted(self) -> str:
+        """Return the encrypted secret key."""
+        return self._secret_key_encrypted
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,

@@ -17,7 +17,11 @@
       "Bash(print)",
       "Bash(eof)",
       "Bash(sed *)",
-      "Bash(xargs *)"
+      "Bash(xargs *)",
+      "Bash(r *)",
+      "Bash(del *)",
+      "Bash(d *)",
+      "Bash(rmdir *)"
     ]
   },
   "$version": 3

