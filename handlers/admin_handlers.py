@@ -137,9 +137,9 @@ async def cb_a_main(query: CallbackQuery) -> None:
     from models.admin_model import Admin
     if not Admin.is_admin(uid):
         await query.answer("🚫 Admin only", show_alert=True); return
+    await query.answer()
     is_sa = Admin.is_super_admin(uid)
     await query.message.edit_text("🔧 *Admin Panel*", parse_mode="MarkdownV2", reply_markup=admin_panel(is_super_admin=is_sa))
-    await query.answer()
 
 
 # ── Admin: Users ───────────────────────────────────────────────────────────
@@ -147,23 +147,24 @@ async def cb_a_main(query: CallbackQuery) -> None:
 async def cb_a_users(query: CallbackQuery) -> None:
     page = int(query.data.split(":")[1])
     pp = 8
+    await query.answer()
     total = User.count()
     if total == 0:
         txt = "📭 No registered users\\."
         kb = back_to_admin_panel()
         await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=kb)
-        await query.answer(); return
+        return
     tp = max(1, (total + pp - 1) // pp)
     off = (page - 1) * pp
     users = User.get_all(limit=pp, offset=off)
     txt = f"👥 *Users* \\({total}\\) — Page {page}/{tp}\n\n_Tap a user below to manage\\._"
     kb = users_list(page, tp, total, users)
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_user_detail(query: CallbackQuery) -> None:
     tid = int(query.data.split(":")[1])
+    await query.answer()
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
@@ -180,25 +181,24 @@ async def cb_user_detail(query: CallbackQuery) -> None:
         txt += " 🛡️"
     txt += f"\n\nID: `{tid}`\nStatus: {ban}\nCredits: `{u.credits}`\nPlan: {pn}\nJoined: {cr}"
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=user_detail(tid, u.is_banned, is_admin_target=is_adm))
-    await query.answer()
 
 
 async def cb_user_search(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.search)
     await query.message.answer("🔍 *Search* — send username or ID:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: User Actions ───────────────────────────────────────────────────
 
 async def cb_user_add_credits(query: CallbackQuery, state: FSMContext) -> None:
     tid = int(query.data.split(":")[1])
+    await query.answer()
     await state.update_data(tid=tid)
     await state.set_state(AdminFSM.add_credits)
     await query.message.answer(f"💰 Send credit amount for user `{tid}`:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_user_reset_credits(query: CallbackQuery) -> None:
@@ -206,12 +206,12 @@ async def cb_user_reset_credits(query: CallbackQuery) -> None:
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
+    await query.answer()
     await query.message.answer(
         f"🔄 Reset credits for *{escape_md(u.username or str(tid))}* to 0?",
         parse_mode="MarkdownV2",
         reply_markup=confirm(f"urescr_ok:{tid}", f"udet:{tid}")
     )
-    await query.answer()
 
 
 async def cb_user_reset_ok(query: CallbackQuery, bot: Bot) -> None:
@@ -219,6 +219,7 @@ async def cb_user_reset_ok(query: CallbackQuery, bot: Bot) -> None:
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
+    await query.answer()
     old = u.credits
     u.reset_credits()
     _log(query.from_user.id, query.from_user.username, "reset_user", {"tid": tid})
@@ -228,7 +229,6 @@ async def cb_user_reset_ok(query: CallbackQuery, bot: Bot) -> None:
         pass
     await query.message.answer(f"✅ Reset: `{old}` → `0`", parse_mode="MarkdownV2",
                                 reply_markup=user_detail(tid, u.is_banned, is_admin_target=_is_admin(tid)))
-    await query.answer()
 
 
 async def cb_user_ban(query: CallbackQuery, bot: Bot) -> None:
@@ -240,13 +240,13 @@ async def cb_user_ban(query: CallbackQuery, bot: Bot) -> None:
         await query.answer("❌ Not found", show_alert=True); return
     if u.is_banned:
         await query.answer("Already banned", show_alert=True); return
+    await query.answer("🚫 Banned")
     u.ban()
     _log(query.from_user.id, query.from_user.username, "ban_user", {"tid": tid})
     try:
         await bot.send_message(tid, "🚫 Account suspended\\.", parse_mode="MarkdownV2")
     except Exception:
         pass
-    await query.answer("🚫 Banned")
     await cb_user_detail(query)
 
 
@@ -257,13 +257,13 @@ async def cb_user_unban(query: CallbackQuery, bot: Bot) -> None:
         await query.answer("❌ Not found", show_alert=True); return
     if not u.is_banned:
         await query.answer("Not banned", show_alert=True); return
+    await query.answer("✅ Unbanned")
     u.unban()
     _log(query.from_user.id, query.from_user.username, "unban_user", {"tid": tid})
     try:
         await bot.send_message(tid, "✅ Account restored\\.", parse_mode="MarkdownV2")
     except Exception:
         pass
-    await query.answer("✅ Unbanned")
     await cb_user_detail(query)
 
 
@@ -274,12 +274,12 @@ async def cb_user_delete(query: CallbackQuery) -> None:
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
+    await query.answer()
     await query.message.answer(
         f"🗑️ Delete *{escape_md(u.username or str(tid))}*?",
         parse_mode="MarkdownV2",
         reply_markup=confirm(f"udel_ok:{tid}", f"udet:{tid}")
     )
-    await query.answer()
 
 
 async def cb_user_delete_ok(query: CallbackQuery) -> None:
@@ -294,7 +294,6 @@ async def cb_user_delete_ok(query: CallbackQuery) -> None:
     _log(query.from_user.id, query.from_user.username, "delete_user", {"tid": tid})
     await query.message.edit_text(f"🗑️ `{escape_md(nm)}` deleted\\.", parse_mode="MarkdownV2",
                                    reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_user_history(query: CallbackQuery) -> None:
@@ -302,12 +301,13 @@ async def cb_user_history(query: CallbackQuery) -> None:
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
+    await query.answer()
     logs = ValidationLog.get_by_user(tid, limit=15)
     d = escape_md(u.username) if u.username else str(tid)
     if not logs:
         await query.message.answer(f"📭 No history for {d}\\.", parse_mode="MarkdownV2",
                                     reply_markup=back_to_admin_panel())
-        await query.answer(); return
+        return
     lines = [f"📜 *{d}*\n"]
     for l in logs[:15]:
         ic = {"valid":"✅","declined":"❌","error":"⚠️","3ds_required":"🔒"}.get(l.status,"❓")
@@ -315,7 +315,6 @@ async def cb_user_history(query: CallbackQuery) -> None:
         lines.append(f"{ic} `{l.card_bin}****{l.last4}` — {l.status}{dc}")
     await query.message.answer("\n".join(lines), parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_user_credits(query: CallbackQuery) -> None:
@@ -323,12 +322,13 @@ async def cb_user_credits(query: CallbackQuery) -> None:
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
+    await query.answer()
     txs = CreditTransaction.get_by_user(tid, limit=20)
     d = escape_md(u.username) if u.username else str(tid)
     if not txs:
         await query.message.answer(f"📭 No txns for {d}\\.", parse_mode="MarkdownV2",
                                     reply_markup=back_to_admin_panel())
-        await query.answer(); return
+        return
     icons = {"validation":"💳","admin_add":"💰","admin_reset":"🔄","plan_assign":"📦"}
     lines = [f"📜 *Credits: {d}*\\n"]
     for t in txs[:20]:
@@ -353,7 +353,8 @@ async def cb_user_reverse_credits(query: CallbackQuery) -> None:
     u = User.get_by_telegram_id(tid)
     if not u:
         await query.answer("❌ Not found", show_alert=True); return
-    
+
+    await query.answer()
     reversible = get_reversible_transactions(tid, limit=20)
     
     if not reversible:
@@ -382,7 +383,6 @@ async def cb_user_reverse_credits(query: CallbackQuery) -> None:
     ])
     
     await query.message.edit_text("\n".join(lines), parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_user_reverse_confirm(query: CallbackQuery) -> None:
@@ -390,11 +390,12 @@ async def cb_user_reverse_confirm(query: CallbackQuery) -> None:
     tx_id = int(query.data.split(":")[1])
     from services.credit_reversal import can_reverse_transaction
     can_rev, reason = can_reverse_transaction(tx_id)
-    
+
     if not can_rev:
         await query.answer(f"❌ {reason}", show_alert=True)
         return
-    
+
+    await query.answer()
     await query.message.edit_text(
         f"⚠️ *Confirm Reversal*\n\n"
         f"Transaction ID: `{tx_id}`\n"
@@ -404,7 +405,6 @@ async def cb_user_reverse_confirm(query: CallbackQuery) -> None:
         parse_mode="MarkdownV2",
         reply_markup=confirm(f"urev_ok:{tx_id}")
     )
-    await query.answer()
 
 
 async def cb_user_reverse_ok(query: CallbackQuery) -> None:
@@ -468,6 +468,7 @@ async def cb_a_backups(query: CallbackQuery) -> None:
     """Show backup management menu."""
     from services.backup_service import list_backups, format_backup_summary
 
+    await query.answer()
     try:
         backups = await list_backups(limit=5)
     except Exception as e:
@@ -497,7 +498,6 @@ async def cb_a_backups(query: CallbackQuery) -> None:
     ])
 
     await query.message.edit_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_backup_create(query: CallbackQuery) -> None:
@@ -536,14 +536,13 @@ async def cb_backup_create(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_admin_panel()
         )
-    
-    await query.answer()
 
 
 async def cb_backup_list(query: CallbackQuery) -> None:
     """List all backups."""
     from services.backup_service import list_backups, format_backup_summary
-    
+
+    await query.answer()
     backups = await list_backups(limit=20)
     text = format_backup_summary(backups)
     
@@ -552,7 +551,6 @@ async def cb_backup_list(query: CallbackQuery) -> None:
     ])
     
     await query.message.edit_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_backup_export_users_json(query: CallbackQuery) -> None:
@@ -602,8 +600,6 @@ async def cb_backup_export_users_json(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_admin_panel()
         )
-    
-    await query.answer()
 
 
 async def cb_backup_export_users_csv(query: CallbackQuery) -> None:
@@ -653,61 +649,59 @@ async def cb_backup_export_users_csv(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_admin_panel()
         )
-    
-    await query.answer()
 
 
 # ── Admin: Stripe ─────────────────────────────────────────────────────────
 
 async def cb_a_stripe(query: CallbackQuery) -> None:
+    await query.answer()
     accts = StripeAccount.get_all()
     txt = "🔑 *Stripe Accounts*"
     if not accts:
         txt += "\n\n_No accounts yet\\._"
     kb = stripe_list(accts)
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_stripe_detail(query: CallbackQuery) -> None:
     aid = int(query.data.split(":")[1])
+    await query.answer()
     a = StripeAccount.get_by_id(aid)
     if not a:
         await query.answer("❌ Not found", show_alert=True); return
     tag = "✅ Active" if a.is_active else "❌ Inactive"
     txt = f"🔑 *{escape_md(a.label)}*\n\nID: `{a.id}`\nStatus: {tag}\nToday: {a.daily_count}/{config.stripe_account_daily_limit}"
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=stripe_detail(aid))
-    await query.answer()
 
 
 async def cb_stripe_activate(query: CallbackQuery) -> None:
     aid = int(query.data.split(":")[1])
+    await query.answer()
     a = StripeAccount.get_by_id(aid)
     if not a:
         await query.answer("❌ Not found", show_alert=True); return
     a.activate()
     _log(query.from_user.id, query.from_user.username, "switch_stripe", {"label": a.label})
-    await query.answer(f"✅ {a.label}")
     await cb_stripe_detail(query)
 
 
 async def cb_stripe_rename(query: CallbackQuery, state: FSMContext) -> None:
     aid = int(query.data.split(":")[1])
+    await query.answer()
     await state.update_data(tid=aid)
     await state.set_state(AdminFSM.rename_stripe)
     await query.message.answer("📝 Send new name:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_stripe_delete(query: CallbackQuery) -> None:
     aid = int(query.data.split(":")[1])
+    await query.answer()
     a = StripeAccount.get_by_id(aid)
     if not a:
         await query.answer("❌ Not found", show_alert=True); return
     await query.message.answer(f"🗑️ Delete *{escape_md(a.label)}*?", parse_mode="MarkdownV2",
                                 reply_markup=confirm(f"sdel_ok:{aid}", "a_stripe"))
-    await query.answer()
 
 
 async def cb_stripe_delete_ok(query: CallbackQuery) -> None:
@@ -718,30 +712,30 @@ async def cb_stripe_delete_ok(query: CallbackQuery) -> None:
     _log(query.from_user.id, query.from_user.username, "delete_stripe", {"label": nm})
     await query.message.edit_text(f"🗑️ *{escape_md(nm)}* deleted\\.", parse_mode="MarkdownV2",
                                    reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_stripe_add(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.add_stripe)
     await query.message.answer(
         "➕ *Add Stripe*\n\nSend: `label sk_live_key`\nEx: `Main sk_live_abc123`",
         parse_mode="MarkdownV2", reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: Plans ──────────────────────────────────────────────────────────
 
 async def cb_a_plans(query: CallbackQuery) -> None:
+    await query.answer()
     pls = Plan.get_all()
     txt = "📦 *Plans*"
     if not pls:
         txt += "\n\n_None yet\\._"
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=plans_list(pls))
-    await query.answer()
 
 
 async def cb_plan_detail(query: CallbackQuery) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     p = Plan.get_by_id(pid)
     if not p:
         await query.answer("❌ Not found", show_alert=True); return
@@ -749,79 +743,79 @@ async def cb_plan_detail(query: CallbackQuery) -> None:
     ps = f"${p.crypto_price_usd:.2f}".replace(".", "\\.")
     txt = f"{tag} *{escape_md(p.name)}*\n\nCredits: `{p.credits}`\nPrice: `{ps}`"
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=plan_detail(pid))
-    await query.answer()
 
 
 async def cb_plan_toggle(query: CallbackQuery) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     p = Plan.get_by_id(pid)
     if not p:
         await query.answer("❌ Not found", show_alert=True); return
     p.toggle_active()
     _log(query.from_user.id, query.from_user.username, "toggle_plan", {"pid": pid})
-    await query.answer(f"{'✅' if p.is_active else '❌'} {p.name}")
     await cb_plan_detail(query)
 
 
 async def cb_plan_delete(query: CallbackQuery) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     p = Plan.get_by_id(pid)
     if not p:
         await query.answer("❌ Not found", show_alert=True); return
     await query.message.answer(f"🗑️ Delete *{escape_md(p.name)}*?", parse_mode="MarkdownV2",
                                 reply_markup=confirm(f"pdel_ok:{pid}", f"pedt:{pid}"))
-    await query.answer()
 
 
 async def cb_plan_delete_ok(query: CallbackQuery) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     p = Plan.get_by_id(pid)
     nm = p.name if p else "?"
     Plan.delete(pid)
     _log(query.from_user.id, query.from_user.username, "delete_plan", {"pid": pid})
     await query.message.edit_text(f"🗑️ *{escape_md(nm)}* deleted\\.", parse_mode="MarkdownV2",
                                    reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_plan_add(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.create_plan)
     await query.message.answer(
         "➕ *Create Plan*\n\nSend: `name price credits`\nEx: `Premium 25.00 100`",
         parse_mode="MarkdownV2", reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_plan_edit_name(query: CallbackQuery, state: FSMContext) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     await state.update_data(tid=pid)
     await state.set_state(AdminFSM.edit_plan_name)
     await query.message.answer("📝 Send new name:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_plan_edit_price(query: CallbackQuery, state: FSMContext) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     await state.update_data(tid=pid)
     await state.set_state(AdminFSM.edit_plan_price)
     await query.message.answer("💲 Send new price:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_plan_edit_credits(query: CallbackQuery, state: FSMContext) -> None:
     pid = int(query.data.split(":")[1])
+    await query.answer()
     await state.update_data(tid=pid)
     await state.set_state(AdminFSM.edit_plan_credits)
     await query.message.answer("💳 Send new credits:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: Stats ──────────────────────────────────────────────────────────
 
 async def cb_a_stats(query: CallbackQuery) -> None:
+    await query.answer()
     st = ValidationLog.get_stats()
     act = StripeAccount.get_active()
     si = act.label if act else "None"
@@ -837,12 +831,12 @@ async def cb_a_stats(query: CallbackQuery) -> None:
         f"Users: {len(users)} total, {with_credits} with credits"
     )
     await query.message.edit_text(txt, reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: Audit ──────────────────────────────────────────────────────────
 
 async def cb_a_audit(query: CallbackQuery) -> None:
+    await query.answer()
     logs = AdminLog.get_recent(limit=20)
     if not logs:
         txt = "📋 *No logs*"
@@ -860,21 +854,21 @@ async def cb_a_audit(query: CallbackQuery) -> None:
             lines.append(f"{ic} `{ts}` {safe}: {escape_md(l.action)}")
         txt = "\n".join(lines)
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: Broadcast ──────────────────────────────────────────────────────
 
 async def cb_a_broadcast(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.broadcast)
     await query.message.answer("📢 *Type message to broadcast*", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: Settings ───────────────────────────────────────────────────────
 
 async def cb_a_settings(query: CallbackQuery) -> None:
+    await query.answer()
     s = Settings.get_crypto_addresses()
     u = f"`{escape_md(s['usdt'][:8])}...{escape_md(s['usdt'][-6:])}`" if s['usdt'] else "`—`"
     b = f"`{escape_md(s['btc'][:8])}...{escape_md(s['btc'][-6:])}`" if s['btc'] else "`—`"
@@ -883,50 +877,50 @@ async def cb_a_settings(query: CallbackQuery) -> None:
     bc = Settings.get("bin_validation_cost") or "0"
     txt = f"⚙️ Settings\n\nUSDT: {u}\nBTC: {b}\nContact: {c}\n\nStripe cost: {sc} cr\nBIN cost: {bc} cr"
     await query.message.edit_text(txt, reply_markup=settings_keyboard())
-    await query.answer()
 
 
 async def cb_settings_usdt(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.set_usdt)
     await query.message.answer("📝 Send USDT address:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_settings_btc(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.set_btc)
     await query.message.answer("📝 Send BTC address:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_settings_contact(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.set_contact)
     await query.message.answer("📝 Send admin contact:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_set_stripe_cost(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.set_stripe_cost)
     await query.message.answer(
         "💳 Send Stripe validation cost in credits:",
         reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_set_bin_cost(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer()
     await state.set_state(AdminFSM.set_bin_cost)
     await query.message.answer(
         "🔍 Send BIN validation cost in credits:",
         reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Admin: Manage Admins ─────────────────────────────────────────────────
 
 async def cb_manage_admins(query: CallbackQuery) -> None:
     if not _require_super_admin(query): return
+    await query.answer()
     from models.admin_model import Admin
     admins = Admin.get_all()
     if not admins:
@@ -936,7 +930,7 @@ async def cb_manage_admins(query: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 Admin Panel", callback_data="a_main")],
         ])
         await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=kb)
-        await query.answer(); return
+        return
     lines = ["👑 *Admin Management*"]
     for a in admins:
         tag = "🌟" if a.role == "super_admin" else "👤"
@@ -949,12 +943,12 @@ async def cb_manage_admins(query: CallbackQuery) -> None:
         [InlineKeyboardButton(text="🔙 Admin Panel", callback_data="a_main")],
     ])
     await query.message.edit_text("\n".join(lines), parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_admin_detail(query: CallbackQuery) -> None:
     from models.admin_model import Admin
     tid = int(query.data.split(":")[1])
+    await query.answer()
     a = Admin.get_by_id(tid)
     if not a:
         await query.answer("❌ Not found", show_alert=True); return
@@ -968,24 +962,23 @@ async def cb_admin_detail(query: CallbackQuery) -> None:
     kb_btns.append([InlineKeyboardButton(text="🗑️ Remove", callback_data=f"adel:{tid}")])
     kb_btns.append([InlineKeyboardButton(text="🔙 Admin List", callback_data="a_manage_admins")])
     await query.message.edit_text(txt, parse_mode="MarkdownV2", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_btns))
-    await query.answer()
 
 
 async def cb_add_admin_prompt(query: CallbackQuery, state: FSMContext) -> None:
     if not _require_super_admin(query): return
+    await query.answer()
     await state.set_state(AdminFSM.add_admin)
     await query.message.answer("➕ *Add Admin*\n\nSend Telegram ID or @username:", parse_mode="MarkdownV2",
                                 reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 async def cb_admin_promote(query: CallbackQuery) -> None:
     if not _require_super_admin(query): return
     from models.admin_model import Admin
     tid = int(query.data.split(":")[1])
+    await query.answer("🌟 Promoted to super admin")
     Admin.set_role(tid, "super_admin")
     _log(query.from_user.id, query.from_user.username, "promote_admin", {"telegram_id": tid})
-    await query.answer("🌟 Promoted to super admin")
     await cb_admin_detail(query)
 
 
@@ -993,9 +986,9 @@ async def cb_admin_demote(query: CallbackQuery) -> None:
     if not _require_super_admin(query): return
     from models.admin_model import Admin
     tid = int(query.data.split(":")[1])
+    await query.answer("🔻 Demoted to admin")
     Admin.set_role(tid, "admin")
     _log(query.from_user.id, query.from_user.username, "demote_admin", {"telegram_id": tid})
-    await query.answer("🔻 Demoted to admin")
     await cb_admin_detail(query)
 
 
@@ -1003,6 +996,7 @@ async def cb_admin_remove_confirm(query: CallbackQuery) -> None:
     if not _require_super_admin(query): return
     from models.admin_model import Admin
     tid = int(query.data.split(":")[1])
+    await query.answer()
     a = Admin.get_by_id(tid)
     nm = a.username if a else str(tid)
     await query.message.answer(
@@ -1010,20 +1004,19 @@ async def cb_admin_remove_confirm(query: CallbackQuery) -> None:
         parse_mode="MarkdownV2",
         reply_markup=confirm(f"adel_ok:{tid}", f"adet:{tid}")
     )
-    await query.answer()
 
 
 async def cb_admin_remove_ok(query: CallbackQuery) -> None:
     if not _require_super_admin(query): return
     from models.admin_model import Admin
     tid = int(query.data.split(":")[1])
+    await query.answer()
     a = Admin.get_by_id(tid)
     nm = a.username if a else str(tid)
     Admin.remove(tid)
     _log(query.from_user.id, query.from_user.username, "remove_admin", {"telegram_id": tid})
     await query.message.edit_text(f"🗑️ `{escape_md(nm)}` removed from admins\\.", parse_mode="MarkdownV2",
                                    reply_markup=back_to_admin_panel())
-    await query.answer()
 
 
 # ── Text Router (admin FSM) ───────────────────────────────────────────────

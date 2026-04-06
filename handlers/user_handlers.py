@@ -113,6 +113,7 @@ async def cb_u_validate(query: CallbackQuery, state: FSMContext) -> None:
     if user.is_banned:
         await query.answer("🚫 Account suspended", show_alert=True); return
 
+    await query.answer()
     from models.stripe_account import StripeAccount
     from models.settings import Settings
     sa = StripeAccount.get_active()
@@ -142,7 +143,6 @@ async def cb_u_validate(query: CallbackQuery, state: FSMContext) -> None:
     )
     from states import CardValidationState
     await state.set_state(CardValidationState.waiting_for_card)
-    await query.answer()
 
 
 async def cb_u_balance(query: CallbackQuery) -> None:
@@ -150,13 +150,13 @@ async def cb_u_balance(query: CallbackQuery) -> None:
     user = User.get_by_telegram_id(uid)
     if not user:
         await query.answer("⚠️ Use /start first", show_alert=True); return
+    await query.answer()
     bal = "∞" if _is_admin(uid) else str(user.credits)
     await query.message.answer(
         f"💰 *Balance*\n\nCredits: `{bal}`",
         parse_mode="MarkdownV2",
         reply_markup=_menu(uid),
     )
-    await query.answer()
 
 
 async def cmd_balance(message: Message) -> None:
@@ -180,16 +180,16 @@ async def cb_u_quota(query: CallbackQuery) -> None:
     if not user:
         await query.answer("⚠️ Use /start first", show_alert=True)
         return
-    
+
+    await query.answer()
     status = get_user_rate_limit_status(uid)
     text = format_rate_limit_status(status)
-    
+
     await query.message.answer(
         text,
         parse_mode="MarkdownV2",
         reply_markup=_menu(uid)
     )
-    await query.answer()
 
 
 async def cb_u_plans(query: CallbackQuery) -> None:
@@ -197,18 +197,18 @@ async def cb_u_plans(query: CallbackQuery) -> None:
     user = User.get_by_telegram_id(uid)
     if not user:
         await query.answer("⚠️ Use /start first", show_alert=True); return
+    await query.answer()
     plans = Plan.get_active()
     if not plans:
         await query.message.answer("📭 No active plans\\. Contact admin\\.", parse_mode="MarkdownV2",
                                     reply_markup=_menu(uid))
-        await query.answer(); return
+        return
     lines = ["📦 *Plans*\n"]
     for p in plans:
         ps = f"${p.crypto_price_usd:.2f}".replace(".", "\\.")
         lines.append(f"• {escape_md(p.name)} — {p.credits}cr — `{ps}`")
     lines.append("\nDM admin with TX ID after payment\\.")
     await query.message.answer("\n".join(lines), parse_mode="MarkdownV2", reply_markup=_menu(uid))
-    await query.answer()
 
 
 async def cb_u_history(query: CallbackQuery) -> None:
@@ -216,10 +216,11 @@ async def cb_u_history(query: CallbackQuery) -> None:
     user = User.get_by_telegram_id(uid)
     if not user:
         await query.answer("⚠️ Use /start first", show_alert=True); return
+    await query.answer()
     logs = ValidationLog.get_by_user(uid, limit=15)
     if not logs:
         await query.message.answer("📭 No history yet\\. Use 📤 Export to download data\\.", parse_mode="MarkdownV2", reply_markup=_menu(uid))
-        await query.answer(); return
+        return
     lines = ["📜 *History* \\(last 15\\)\n"]
     for l in logs[:15]:
         ic = {"valid":"✅","declined":"❌","error":"⚠️","3ds_required":"🔒","duplicate":"⏳"}.get(l.status,"❓")
@@ -237,9 +238,8 @@ async def cb_u_history(query: CallbackQuery) -> None:
         [InlineKeyboardButton(text="📤 Export Full History", callback_data="u_export_history")],
         [InlineKeyboardButton(text="🔙 Main Menu", callback_data="u_menu")],
     ])
-    
+
     await query.message.answer("\n".join(lines), parse_mode="MarkdownV2", reply_markup=kb_with_export)
-    await query.answer()
 
 
 async def cb_u_export_history(query: CallbackQuery) -> None:
@@ -249,7 +249,8 @@ async def cb_u_export_history(query: CallbackQuery) -> None:
     if not user:
         await query.answer("⚠️ Use /start first", show_alert=True)
         return
-    
+
+    await query.answer()
     text = (
         "📤 *Export Validation History*\n\n"
         "Choose your preferred format:\n\n"
@@ -268,7 +269,6 @@ async def cb_u_export_history(query: CallbackQuery) -> None:
     ])
     
     await query.message.edit_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-    await query.answer()
 
 
 async def cb_export_json(query: CallbackQuery) -> None:
@@ -309,8 +309,6 @@ async def cb_export_json(query: CallbackQuery) -> None:
             reply_markup=back_to_user_menu()
         )
 
-    await query.answer()
-
 
 async def cb_export_csv(query: CallbackQuery) -> None:
     """Export history to CSV."""
@@ -350,8 +348,6 @@ async def cb_export_csv(query: CallbackQuery) -> None:
             reply_markup=back_to_user_menu()
         )
 
-    await query.answer()
-
 
 async def cb_export_txt(query: CallbackQuery) -> None:
     """Export history to text."""
@@ -390,8 +386,6 @@ async def cb_export_txt(query: CallbackQuery) -> None:
             parse_mode="MarkdownV2",
             reply_markup=back_to_user_menu()
         )
-
-    await query.answer()
 
 
 async def cmd_quota(message: Message) -> None:
@@ -499,6 +493,7 @@ async def cmd_help(message: Message) -> None:
 
 
 async def cb_u_help(query: CallbackQuery) -> None:
+    await query.answer()
     await query.message.answer(
         "📖 *Help*\n\n"
         "💳 *Validate:* tap Validate, send `num|mm|yyyy|cvv`\n\n"
@@ -509,7 +504,6 @@ async def cb_u_help(query: CallbackQuery) -> None:
         parse_mode="MarkdownV2",
         reply_markup=_menu(query.from_user.id),
     )
-    await query.answer()
 
 
 async def cb_u_menu(query: CallbackQuery) -> None:
@@ -517,6 +511,7 @@ async def cb_u_menu(query: CallbackQuery) -> None:
     user = User.get_by_telegram_id(uid)
     if not user:
         await query.answer("⚠️ Use /start first", show_alert=True); return
+    await query.answer()
     plan = ""
     if user.plan_id:
         p = Plan.get_by_id(user.plan_id)
@@ -531,7 +526,6 @@ async def cb_u_menu(query: CallbackQuery) -> None:
         parse_mode="MarkdownV2",
         reply_markup=_menu(uid),
     )
-    await query.answer()
 
 
 
