@@ -235,4 +235,4 @@ def cancel_payment_intent():
 
 if __name__ == '__main__':
     port = int(os.getenv('WEBAPP_PORT', '5000'))
-    app.run(host='127.0.0.1', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
