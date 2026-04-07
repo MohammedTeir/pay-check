@@ -176,36 +176,21 @@ async def handle_text(message: Message, state: FSMContext, bot: Bot) -> None:
 
 
 async def start_webapp():
-    """Start the Flask webapp for Stripe Elements using gunicorn."""
+    """Start the Flask webapp for Stripe Elements using waitress."""
     import threading
-    from gunicorn.app.base import BaseApplication
+    from waitress import serve
 
-    class GunicornApp(BaseApplication):
-        def __init__(self, app, options=None):
-            self.options = options or {}
-            self.application = app
-            super().__init__()
+    def run_waitress():
+        serve(
+            flask_app,
+            host='0.0.0.0',
+            port=config.webapp_port,
+            threads=2,
+        )
 
-        def load_config(self):
-            for key, value in self.options.items():
-                self.cfg.set(key, value)
-
-        def load(self):
-            return self.application
-
-    def run_gunicorn():
-        GunicornApp(flask_app, {
-            'bind': f'0.0.0.0:{config.webapp_port}',
-            'workers': 1,
-            'threads': 2,
-            'accesslog': '-',
-            'errorlog': '-',
-            'loglevel': 'info',
-        }).run()
-
-    thread = threading.Thread(target=run_gunicorn, daemon=True)
+    thread = threading.Thread(target=run_waitress, daemon=True)
     thread.start()
-    logger.info(f"Gunicorn webapp started on port {config.webapp_port}")
+    logger.info(f"Waitress webapp started on port {config.webapp_port}")
 
 
 async def main() -> None:
