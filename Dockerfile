@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Security: run as non-root
 RUN groupadd -r appuser && useradd -r -g appuser -d /home/appuser -s /sbin/nologin appuser
 
+# Set Playwright browser install path (shared system-wide location)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 WORKDIR /app
 
 # Install dependencies
@@ -26,6 +29,9 @@ COPY . .
 
 # Create logs directory and set permissions
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+
+# Set permissions on Playwright browsers directory
+RUN chown -R appuser:appuser /ms-playwright
 
 # Switch to non-root user
 USER appuser
