@@ -14,9 +14,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message, CallbackQuery
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiohttp import web
+from aiogram.types import Message, CallbackQuery, Update
 
 from config import config
 from states import CardValidationState
@@ -175,10 +173,32 @@ async def handle_text(message: Message, state: FSMContext, bot: Bot) -> None:
     logger.debug(f"Ignoring text from {message.from_user.id}: {message.text[:50]}")
 
 
-async def start_webapp():
-    """Start the Flask webapp for Stripe Elements using waitress."""
+async def start_webapp(bot: Bot, dp: Dispatcher):
+    """Start the Flask webapp for Stripe Elements using waitress.
+
+    In webhook mode, also registers the /webhook route on Flask so Telegram
+    can push updates to the same server.
+    """
+    import asyncio
     import threading
+    from flask import request as flask_request
     from waitress import serve
+
+    # Register Telegram webhook route on Flask
+    @flask_app.route(config.webhook_path, methods=["POST"])
+    def handle_telegram_webhook():
+        update_data = flask_request.get_json()
+        update = Update.model_validate(update_data)
+        # Schedule the async handler on the running event loop
+        loop = asyncio.get_event_loop()
+        future = asyncio.run_coroutine_threadsafe(
+            dp.feed_webhook_update(bot, update), loop
+        )
+        try:
+            future.result(timeout=30)
+        except Exception as e:
+            logger.error(f"Webhook update error: {e}", exc_info=True)
+        return "ok"
 
     def run_waitress():
         serve(
@@ -196,19 +216,19 @@ async def start_webapp():
 async def main() -> None:
     config.validate()
     logger.info("Starting Card Validator Bot (aiogram 3.x, inline)...")
-    
-    # Start Flask webapp for Stripe Elements
-    if config.stripe_publishable_key:
-        await start_webapp()
-    else:
-        logger.warning("STRIPE_PUBLISHABLE_KEY not set - Stripe Elements validation disabled")
 
     bot = Bot(token=config.telegram_bot_token)
     dp = Dispatcher(storage=MemoryStorage())
-    
+
     # Setup signal handlers for graceful shutdown
     setup_signal_handlers(bot, dp)
-    
+
+    # Start Flask webapp for Stripe Elements (also registers /webhook route in webhook mode)
+    if config.stripe_publishable_key:
+        await start_webapp(bot, dp)
+    else:
+        logger.warning("STRIPE_PUBLISHABLE_KEY not set - Stripe Elements validation disabled")
+
     # Setup session timeout middleware
     session_middleware = SessionTimeoutMiddleware(
         timeout_seconds=900,    # 15 minutes
@@ -357,60 +377,28 @@ async def main() -> None:
 
 
 async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
-    """Run bot in webhook mode with aiohttp server."""
-    # Set webhook
+    """Run bot in webhook mode.
+
+    The webhook endpoint is handled by the Flask webapp (via start_webapp).
+    This function just sets the webhook URL on Telegram and keeps running.
+    """
+    # Set webhook on Telegram
     await bot.set_webhook(
         url=config.webhook_url,
         secret_token=config.webhook_secret if config.webhook_secret else None,
         allowed_updates=dp.resolve_used_update_types()
     )
-    
+
     logger.info(f"Webhook set to: {config.webhook_url}")
-    
-    # Create aiohttp app
-    app = web.Application()
-    
-    # Setup webhook request handler
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-        secret_token=config.webhook_secret if config.webhook_secret else None
-    )
-    webhook_requests_handler.register(app, path=config.webhook_path)
-    
-    # Setup application routes and runner
-    setup_application(app, dp)
-    
-    # Add health check endpoint
-    async def handle_health(request):
-        return web.Response(text="OK", content_type="text/plain")
-    
-    app.router.add_get("/health", handle_health)
-    app.router.add_get("/", handle_health)
-    
-    # Run the app
-    runner = web.AppRunner(app)
-    await runner.setup()
-    
-    site = web.TCPSite(
-        runner,
-        config.webhook_host,
-        config.webhook_port
-    )
-    
-    logger.info(
-        f"Webhook server listening on {config.webhook_host}:{config.webhook_port}"
-    )
-    
+    logger.info(f"Webhook endpoint handled by Flask on port {config.webapp_port}")
+
+    # Keep running until interrupted
     try:
-        await site.start()
-        # Keep running until interrupted
         await asyncio.Event().wait()
     except (KeyboardInterrupt, SystemExit) as e:
-        logger.info(f"Webhook server interrupted: {type(e).__name__}")
+        logger.info(f"Webhook mode interrupted: {type(e).__name__}")
     finally:
         await bot.delete_webhook()
-        await runner.cleanup()
         await graceful_shutdown(bot, dp)
 
 
