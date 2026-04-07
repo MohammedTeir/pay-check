@@ -181,7 +181,7 @@ async def start_webapp():
     
     def run_flask():
         flask_app.run(
-            host='127.0.0.1',
+            host='0.0.0.0',
             port=config.webapp_port,
             debug=False,
             use_reloader=False
