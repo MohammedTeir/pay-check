@@ -192,14 +192,11 @@ async def start_webapp(bot: Bot, dp: Dispatcher):
     def handle_telegram_webhook():
         update_data = flask_request.get_json()
         update = Update.model_validate(update_data)
-        # Schedule the async handler on the main event loop
-        future = asyncio.run_coroutine_threadsafe(
+        # Fire-and-forget: schedule processing on the main loop and return
+        # immediately so Telegram doesn't timeout (it only waits 60s).
+        asyncio.run_coroutine_threadsafe(
             dp.feed_webhook_update(bot, update), main_loop
         )
-        try:
-            future.result(timeout=30)
-        except Exception as e:
-            logger.error(f"Webhook update error: {e}", exc_info=True)
         return "ok"
 
     def run_waitress():
