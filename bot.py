@@ -184,15 +184,17 @@ async def start_webapp(bot: Bot, dp: Dispatcher):
     from flask import request as flask_request
     from waitress import serve
 
+    # Capture reference to the main event loop (we're on the main thread here)
+    main_loop = asyncio.get_running_loop()
+
     # Register Telegram webhook route on Flask
     @flask_app.route(config.webhook_path, methods=["POST"])
     def handle_telegram_webhook():
         update_data = flask_request.get_json()
         update = Update.model_validate(update_data)
-        # Schedule the async handler on the running event loop
-        loop = asyncio.get_event_loop()
+        # Schedule the async handler on the main event loop
         future = asyncio.run_coroutine_threadsafe(
-            dp.feed_webhook_update(bot, update), loop
+            dp.feed_webhook_update(bot, update), main_loop
         )
         try:
             future.result(timeout=30)
