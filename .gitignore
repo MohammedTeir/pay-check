@@ -2,6 +2,12 @@
 .env
 .env.local
 .env.production
+.env.development
+.env.*
+!.env.example
+!.env.template
+!.env.development.example
+!.env.production.example
 *.env.bak
 
 # Python

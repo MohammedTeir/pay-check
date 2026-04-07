@@ -4,7 +4,7 @@ Configuration loader — reads environment variables and provides typed access.
 
 import os
 from dataclasses import dataclass, field
-from typing import Set
+from typing import Set, Literal
 
 from dotenv import load_dotenv
 
@@ -14,6 +14,11 @@ load_dotenv()
 @dataclass(frozen=True)
 class Config:
     """Immutable configuration loaded from environment variables."""
+
+    # Application Environment
+    app_env: Literal["development", "production"] = field(
+        default_factory=lambda: os.getenv("APP_ENV", "development").lower()
+    )
 
     # Telegram
     telegram_bot_token: str = field(
@@ -118,8 +123,22 @@ class Config:
 
     @property
     def use_webhook(self) -> bool:
-        """Return True if webhook mode is enabled."""
-        return bool(self.webhook_url and self.webhook_secret)
+        """Return True if webhook mode is enabled based on environment.
+        
+        In production mode, webhook is required (WEBHOOK_URL must be set).
+        In development mode, defaults to polling unless WEBHOOK_URL is explicitly set.
+        """
+        if self.app_env == "production":
+            # Production always requires webhook
+            return bool(self.webhook_url and self.webhook_secret)
+        else:
+            # Development can use webhook if explicitly configured
+            return bool(self.webhook_url and self.webhook_secret)
+    
+    @property
+    def use_polling(self) -> bool:
+        """Return True if polling mode should be used."""
+        return not self.use_webhook
 
     def validate(self) -> None:
         """Raise ValueError if required configuration is missing."""
@@ -133,9 +152,20 @@ class Config:
         if not self.encryption_key:
             missing.append("ENCRYPTION_KEY")
 
+        # Validate environment-specific requirements
+        if self.app_env == "production" and not self.use_webhook:
+            missing.append("WEBHOOK_URL (required for production mode)")
+            missing.append("WEBHOOK_SECRET (required for production mode)")
+
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}"
+            )
+        
+        # Validate app_env value
+        if self.app_env not in ("development", "production"):
+            raise ValueError(
+                f"Invalid APP_ENV value: '{self.app_env}'. Must be 'development' or 'production'"
             )
 
 

@@ -359,14 +359,16 @@ async def main() -> None:
 
     # ── Startup: Webhook or Polling ─────────────────────────────────
     asyncio.create_task(run_jobs(bot))
-    
+
     if config.use_webhook:
-        # Webhook mode
-        logger.info(f"Starting in webhook mode: {config.webhook_url}")
+        # Webhook mode (typically production)
+        logger.info(f"🌐 Starting in WEBHOOK mode (environment: {config.app_env})")
+        logger.info(f"   Webhook URL: {config.webhook_url}")
+        logger.info(f"   Webhook Port: {config.webapp_port}")
         await run_webhook(bot, dp)
     else:
-        # Polling mode (default)
-        logger.info("Starting in polling mode...")
+        # Polling mode (typically development)
+        logger.info(f"🔄 Starting in POLLING mode (environment: {config.app_env})")
         try:
             await dp.start_polling(bot, drop_pending_updates=True)
         except (KeyboardInterrupt, SystemExit) as e:

@@ -74,6 +74,11 @@ Copy the output → `ENCRYPTION_KEY`
 Create a `.env` file (copy from `.env.example`):
 
 ```env
+# Application Environment
+# - development: Uses polling mode (good for local testing)
+# - production: Uses webhook mode (required for production deployment)
+APP_ENV=development
+
 # Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 
@@ -96,10 +101,8 @@ ADMIN_CONTACT=@your_admin_username
 STRIPE_PUBLISHABLE_KEY=pk_live_xxx
 STRIPE_AMOUNT_CENTS=50
 
-# Webhook (optional - for production deployment)
-WEBHOOK_URL=https://your-app.onrender.com/webhook
-WEBHOOK_SECRET=your_random_secret_here
-# WEBHOOK_PORT defaults to 8080 (not needed if using webhook on same port as Flask)
+# Webapp Port
+WEBAPP_PORT=5000
 
 # Limits
 RATE_LIMIT_PER_HOUR=5
@@ -108,7 +111,36 @@ STRIPE_ACCOUNT_DAILY_LIMIT=200
 CARD_COOLDOWN_HOURS=24
 ```
 
+> **💡 Environment Modes**:
+> - **Development** (`APP_ENV=development`): Uses polling mode by default. No webhook setup needed.
+> - **Production** (`APP_ENV=production`): Requires webhook setup with `WEBHOOK_URL` and `WEBHOOK_SECRET`.
+>
 > **⚠️ Security**: Never commit real credentials to `.env.example` or git. Only placeholder values should be in the repo.
+
+#### Development Mode
+
+For local development, simply set `APP_ENV=development` in your `.env` file:
+
+```env
+APP_ENV=development
+# No webhook configuration needed
+```
+
+The bot will automatically start in polling mode.
+
+#### Production Mode
+
+For production deployment, set `APP_ENV=production` and configure webhook:
+
+```env
+APP_ENV=production
+WEBHOOK_URL=https://your-app.onrender.com/webhook
+WEBHOOK_SECRET=your_random_secret_here
+```
+
+Example environment files are provided:
+- `.env.development.example` - Template for development
+- `.env.production.example` - Template for production
 
 ### 5. Stripe Elements Setup
 
@@ -150,14 +182,14 @@ docker compose logs -f
 3. Connect GitHub repo
 4. **Build Command**: `pip install -r requirements.txt && playwright install chromium`
 5. **Start Command**: `python bot.py`
-6. Add all environment variables in the **Environment** tab
-7. For **webhook mode**, set:
+6. Add all environment variables in the **Environment** tab:
    ```
+   APP_ENV=production
    WEBHOOK_URL=https://your-app.onrender.com/webhook
    WEBHOOK_SECRET=<random-string>
    ```
 
-> **Note**: The bot uses **webhook mode** in production (not polling) to avoid Telegram conflicts. Set `WEBHOOK_URL` + `WEBHOOK_SECRET` to enable it.
+> **Note**: In production mode (`APP_ENV=production`), the bot **requires** webhook configuration. The webhook URL and secret must be set.
 
 ### Railway
 
