@@ -8,7 +8,29 @@ from typing import Set, Literal
 
 from dotenv import load_dotenv
 
+# Parse .env file manually to check if webhook is commented out
+def _is_webhook_enabled_in_env():
+    """Check if WEBHOOK_URL is uncommented in .env file."""
+    try:
+        env_file = os.path.join(os.path.dirname(__file__), ".env")
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    # Check for uncommented WEBHOOK_URL=
+                    if line.startswith("WEBHOOK_URL=") and not line.startswith("#"):
+                        return True
+    except Exception:
+        pass
+    return False
+
 load_dotenv()
+
+# Clear system webhook env vars if not enabled in .env file
+if not _is_webhook_enabled_in_env():
+    os.environ.pop("WEBHOOK_URL", None)
+    os.environ.pop("WEBHOOK_SECRET", None)
+    os.environ.pop("WEBHOOK_PORT", None)
 
 
 @dataclass(frozen=True)
@@ -66,7 +88,7 @@ class Config:
 
     # Webapp (for Stripe Elements automation)
     webapp_port: int = field(
-        default_factory=lambda: int(os.getenv("WEBAPP_PORT", "5000"))
+        default_factory=lambda: int(os.getenv("PORT", os.getenv("WEBAPP_PORT", "5000")))
     )
     webapp_url: str = field(
         default_factory=lambda: os.getenv("WEBAPP_URL", "http://127.0.0.1:5000")

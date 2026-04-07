@@ -8,6 +8,7 @@ Secret key is fetched from database (encrypted storage).
 from flask import Flask, render_template, request, jsonify
 import os
 import sys
+import time
 import httpx
 import logging
 
@@ -81,15 +82,24 @@ def create_payment_intent():
                 'error_message': 'No active Stripe account configured',
                 'intent_id': None,
             }), 500
-        
+
         data = request.json
         payment_method_id = data.get('payment_method_id')
-        
+
         logger.info(f"Creating PaymentIntent for: {payment_method_id}")
-        
+
         if not payment_method_id:
             return jsonify({'success': False, 'error': 'Missing payment_method_id'}), 400
-        
+
+        # Build unique metadata for tracking
+        metadata = {
+            'user_id': str(data.get('user_id', 'unknown')),
+            'validation_id': str(data.get('validation_id', 'unknown')),
+            'card_bin': str(data.get('card_bin', ''))[:6],
+            'card_last4': str(data.get('card_last4', ''))[:4],
+            'timestamp': str(int(time.time())),
+        }
+
         # Create and confirm PaymentIntent via direct HTTP
         form_data = {
             'amount': STRIPE_AMOUNT_CENTS,
@@ -98,6 +108,12 @@ def create_payment_intent():
             'capture_method': 'manual',
             'confirm': 'true',
             'off_session': 'true',
+            'metadata[user_id]': metadata['user_id'],
+            'metadata[validation_id]': metadata['validation_id'],
+            'metadata[card_bin]': metadata['card_bin'],
+            'metadata[card_last4]': metadata['card_last4'],
+            'metadata[timestamp]': metadata['timestamp'],
+            'description': 'Digital product purchase',
         }
         
         with httpx.Client(timeout=30.0) as client:
@@ -168,7 +184,7 @@ def create_payment_intent():
 
 @app.route('/cancel_payment_intent', methods=['POST'])
 def cancel_payment_intent():
-    """Cancel a PaymentIntent (release authorization hold)."""
+    """Cancel a PaymentIntent (manual admin use only - not called automatically)."""
     try:
         secret_key = get_active_stripe_secret_key()
         if not secret_key:

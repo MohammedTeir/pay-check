@@ -15,6 +15,9 @@ RUN groupadd -r appuser && useradd -r -g appuser -d /home/appuser -s /sbin/nolog
 # Set Playwright browser install path (shared system-wide location)
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
+# Render sets PORT dynamically; default to 5000 for local dev
+ENV PORT=5000
+
 WORKDIR /app
 
 # Install dependencies
@@ -39,9 +42,9 @@ USER appuser
 # Expose ports: 5000 for Flask webapp, 8080 for webhook (optional)
 EXPOSE 5000 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import sys; sys.exit(0)"
+# Health check — verify Flask is responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-5000}/ || exit 1
 
 # Start the bot
 CMD ["python", "bot.py"]

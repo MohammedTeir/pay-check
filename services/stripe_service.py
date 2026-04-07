@@ -70,6 +70,8 @@ async def validate_card_with_stripe(
             cvc=card.cvv,
             publishable_key=publishable_key,
             webapp_url=config.webapp_url,
+            user_id=str(user_telegram_id),
+            validation_id=validation_id,
         )
 
         if elements_result.success:
