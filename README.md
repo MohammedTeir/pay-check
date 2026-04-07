@@ -1,6 +1,6 @@
 # Telegram Card Validator Bot
 
-A private Telegram bot that validates credit/debit cards using Stripe's `capture_method: manual` (authorize + cancel, never capture). Users pay for subscription plans via cryptocurrency, and admins manually manage credits.
+A private Telegram bot that validates credit/debit cards using **Stripe Elements + PaymentIntent** (`capture_method: manual`, authorize + cancel, never capture). Users pay for subscription plans via cryptocurrency, and admins manage credits through an inline keyboard interface.
 
 ## ⚠️ Risk Warning
 
@@ -8,19 +8,24 @@ Stripe's terms prohibit using their system solely for "card validation" without 
 
 ## Features
 
-- 🔐 **Secure validation** — Stripe `capture_method: manual`, never captures funds
-- 💰 **Crypto payments** — Users pay via USDT/BTC, admin manually adds credits
+- 💳 **Stripe Elements validation** — Real browser-based card validation via Playwright
+- 🔐 **Secure architecture** — `capture_method: manual`, never captures funds
+- 💰 **Crypto payments** — Users pay via USDT/BTC, admin manages credits
 - 📊 **Multi-tenant Stripe** — Multiple Stripe accounts with admin switching
-- 🛡️ **Anti-ban measures** — Rate limits, duplicate detection, random delays
+- 🛡️ **Anti-ban measures** — Rate limits, duplicate detection, cooldowns
 - 📝 **Full audit logging** — All validations and admin actions logged
 - 🔑 **Encrypted keys** — Stripe secret keys encrypted at rest (AES-256)
+- 🌐 **100% Inline UI** — No ReplyKeyboard, everything via inline buttons
+- 🔄 **Webhook mode** — Production-ready with Telegram webhooks
 
 ## Architecture
 
 ```
-User → Telegram → Bot (PaaS) → Supabase (PostgreSQL)
-                          → Stripe API (PaymentIntent)
-                          → BIN Lookup (local)
+User → Telegram → Bot (Render/Railway) → Supabase (PostgreSQL)
+                                      → Stripe API (PaymentIntent)
+                                      → Playwright (headless Chromium)
+                                      → OpenRouter AI (analysis)
+                                      → BIN Lookup APIs
 ```
 
 ## Tech Stack
@@ -28,11 +33,14 @@ User → Telegram → Bot (PaaS) → Supabase (PostgreSQL)
 | Layer | Technology |
 |---|---|
 | Language | Python 3.11+ |
-| Telegram Bot | aiogram 3.x (async) |
+| Telegram Bot | aiogram 3.x (async, inline only) |
 | Database | Supabase (PostgreSQL) |
-| Stripe SDK | stripe-python |
+| Stripe SDK | stripe-python + direct HTTP |
+| Web App | Flask (Waitress WSGI server) |
+| Browser Automation | Playwright (headless Chromium) |
 | Encryption | cryptography (Fernet/AES-256) |
-| Deployment | Docker (Railway/Render/Fly.io) |
+| AI Analysis | OpenRouter API |
+| Deployment | Docker (Render/Railway/Fly.io) |
 
 ## Setup
 
@@ -66,26 +74,58 @@ Copy the output → `ENCRYPTION_KEY`
 Create a `.env` file (copy from `.env.example`):
 
 ```env
+# Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token_here
+
+# Supabase
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# Encryption
 ENCRYPTION_KEY=your_fernet_key_here
+
+# Admin IDs (comma-separated Telegram user IDs)
 ADMIN_IDS=123456789,987654321
+
+# Crypto Addresses
 CRYPTO_ADDRESS_USDT=your_usdt_trc20_address
 CRYPTO_ADDRESS_BTC=your_btc_address
 ADMIN_CONTACT=@your_admin_username
+
+# Stripe Elements
+STRIPE_PUBLISHABLE_KEY=pk_live_xxx
 STRIPE_AMOUNT_CENTS=50
+
+# Webhook (optional - for production deployment)
+WEBHOOK_URL=https://your-app.onrender.com/webhook
+WEBHOOK_SECRET=your_random_secret_here
+# WEBHOOK_PORT defaults to 8080 (not needed if using webhook on same port as Flask)
+
+# Limits
 RATE_LIMIT_PER_HOUR=5
 RATE_LIMIT_PER_DAY=20
 STRIPE_ACCOUNT_DAILY_LIMIT=200
 CARD_COOLDOWN_HOURS=24
 ```
 
+> **⚠️ Security**: Never commit real credentials to `.env.example` or git. Only placeholder values should be in the repo.
+
+### 5. Stripe Elements Setup
+
+The bot uses Playwright to automate Stripe Elements validation (real browser interaction):
+
+1. Add a Stripe publishable key via admin panel (`/admin` → **Stripe** → **Add Account**)
+2. Playwright will automatically download Chromium on first build
+3. The webapp serves Stripe Elements via Flask (port 5000)
+
 ### 5. Local Development
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+
+# Install Playwright browsers
+playwright install chromium
 
 # Run the bot
 python bot.py
@@ -103,20 +143,28 @@ docker compose logs -f
 
 ## Deployment to PaaS
 
-### Railway
+### Render (Recommended)
 
 1. Push repo to GitHub
-2. Import project on [railway.app](https://railway.app)
-3. Add environment variables in Railway dashboard
+2. Create **Web Service** on [render.com](https://render.com)
+3. Connect GitHub repo
+4. **Build Command**: `pip install -r requirements.txt && playwright install chromium`
+5. **Start Command**: `python bot.py`
+6. Add all environment variables in the **Environment** tab
+7. For **webhook mode**, set:
+   ```
+   WEBHOOK_URL=https://your-app.onrender.com/webhook
+   WEBHOOK_SECRET=<random-string>
+   ```
+
+> **Note**: The bot uses **webhook mode** in production (not polling) to avoid Telegram conflicts. Set `WEBHOOK_URL` + `WEBHOOK_SECRET` to enable it.
+
+### Railway
+
+1. Import project on [railway.app](https://railway.app)
+2. Add environment variables in dashboard
+3. Add post-deploy command: `playwright install chromium`
 4. Deploy automatically
-
-### Render
-
-1. Create **Web Service** on [render.com](https://render.com)
-2. Connect GitHub repo
-3. Set build command: `pip install -r requirements.txt`
-4. Set start command: `python bot.py`
-5. Add environment variables
 
 ### Fly.io
 
@@ -128,9 +176,9 @@ fly deploy
 
 ## Bot Interface
 
-The bot uses **persistent ReplyKeyboard menus** at the bottom of the chat for easy navigation, plus direct commands.
+The bot uses **inline keyboard buttons** for all navigation and actions. No ReplyKeyboard menus.
 
-### User Menu Buttons
+### User Menu
 
 | Button | Action |
 |---|---|
@@ -141,7 +189,7 @@ The bot uses **persistent ReplyKeyboard menus** at the bottom of the chat for ea
 | ❓ Help | Usage instructions |
 | 🔧 Admin | Admin panel (admins only) |
 
-### Admin Menu Buttons
+### Admin Panel
 
 | Button | Action |
 |---|---|
@@ -152,7 +200,6 @@ The bot uses **persistent ReplyKeyboard menus** at the bottom of the chat for ea
 | 📋 Audit | Recent admin actions |
 | 📢 Broadcast | Message all users |
 | ⚙️ Settings | View/edit bot settings |
-| 🔙 Close Menu | Return to user keyboard |
 
 ### User Commands
 
@@ -213,23 +260,24 @@ See `database/migrations/001_initial_schema.sql` for full schema.
 
 | Measure | Implementation |
 |---|---|
+| Stripe Elements | Real browser validation via Playwright |
 | Manual capture | `capture_method: manual`, always cancelled |
 | No $0 auths | Minimum $0.50 authorization |
 | Rate limiting | 5/hour, 20/day per user |
 | Duplicate prevention | 24h cooldown per card (salted hash) |
-| Stripe daily limit | 200/Day per Stripe account |
+| Stripe daily limit | 200/day per Stripe account |
 | Random delays | 1-5 seconds between Stripe ops |
 | Unique metadata | UUID4 + telegram_user_id per validation |
 | Encrypted keys | Fernet AES-256 at rest |
 
 ## What This System Does NOT Do
 
-- ❌ No public web interface
 - ❌ No charge + refund pattern
 - ❌ No capturing funds
 - ❌ No $0 authorizations
 - ❌ No bulk/automated card testing
 - ❌ No Stripe billing automation
+- ❌ No card balance checking (requires bank API access)
 
 ## Security Notes
 
@@ -253,6 +301,7 @@ card_validator_bot/
 ├── config.py                     # Config loader
 ├── states.py                     # FSM states (aiogram)
 ├── filters.py                    # Admin filter
+├── wsgi.py                       # Production WSGI entry point
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
@@ -271,17 +320,25 @@ card_validator_bot/
 │   └── settings.py
 ├── services/
 │   ├── stripe_service.py
+│   ├── stripe_elements_validator.py  # Playwright automation
 │   ├── crypto_service.py
 │   ├── rate_limiter.py
 │   ├── card_validator.py
 │   └── bin_lookup.py
 ├── handlers/
-│   ├── user_handlers.py          # User commands + button handlers
-│   └── admin_handlers.py         # Admin commands + button handlers
+│   ├── user_handlers.py          # User commands + inline handlers
+│   └── admin_handlers.py         # Admin commands + inline handlers
+├── middleware/
+│   └── session_timeout.py        # Session timeout middleware
+├── webapp/
+│   ├── app.py                    # Flask webapp (Stripe Elements page)
+│   └── templates/
+│       └── validate.html         # Stripe Elements form
 ├── utils/
-│   ├── keyboards.py              # ReplyKeyboard + InlineKeyboard builders
+│   ├── keyboards.py              # Inline keyboard builders
 │   ├── formatters.py             # MarkdownV2 escaping
-│   └── card_hash.py              # Card hashing utilities
+│   ├── card_hash.py              # Card hashing utilities
+│   └── health.py                 # /ping, /health commands
 └── tests/
 ```
 
