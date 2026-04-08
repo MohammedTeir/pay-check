@@ -69,7 +69,10 @@ class Config:
         default_factory=lambda: int(os.getenv("PORT", os.getenv("WEBAPP_PORT", "5000")))
     )
     webapp_url: str = field(
-        default_factory=lambda: os.getenv("WEBAPP_URL", "http://127.0.0.1:5000")
+        default_factory=lambda: os.getenv(
+            "WEBAPP_URL",
+            f"http://127.0.0.1:{os.getenv('PORT', os.getenv('WEBAPP_PORT', '5000'))}"
+        )
     )
 
     # Rate limiting
