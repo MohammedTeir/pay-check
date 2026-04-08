@@ -68,6 +68,21 @@ async def validate_card_with_stripe(
             error_message="STRIPE_PUBLISHABLE_KEY not configured in .env",
         )
 
+    # Check if webapp is running before attempting validation
+    try:
+        from bot import is_webapp_available
+        if not is_webapp_available():
+            return ValidationResult(
+                status="error",
+                decline_code=None,
+                stripe_pi_id=None,
+                bank_name=None,
+                card_brand=None,
+                error_message="Flask webapp is not running. Check server logs.",
+            )
+    except ImportError:
+        pass  # Skip check during testing or if bot module isn't available
+
     validation_id = str(uuid4())
     # Use custom amount if provided, otherwise fall back to config default
     amount = amount_cents if amount_cents else config.stripe_amount_cents
