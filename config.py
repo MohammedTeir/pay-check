@@ -66,13 +66,11 @@ class Config:
 
     # Webapp (for Stripe Elements automation)
     webapp_port: int = field(
-        default_factory=lambda: int(os.getenv("PORT", os.getenv("WEBAPP_PORT", "5000")))
+        default_factory=lambda: int(os.getenv("PORT", os.getenv("WEBAPP_PORT", "10000")))
     )
+    # Always auto-construct from PORT — never read WEBAPP_URL env var (causes port mismatch)
     webapp_url: str = field(
-        default_factory=lambda: os.getenv(
-            "WEBAPP_URL",
-            f"http://127.0.0.1:{os.getenv('PORT', os.getenv('WEBAPP_PORT', '5000'))}"
-        )
+        default_factory=lambda: f"http://127.0.0.1:{os.getenv('PORT', os.getenv('WEBAPP_PORT', '10000'))}"
     )
 
     # Rate limiting
