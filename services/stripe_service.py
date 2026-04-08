@@ -68,20 +68,38 @@ async def validate_card_with_stripe(
             error_message="STRIPE_PUBLISHABLE_KEY not configured in .env",
         )
 
-    # Check if webapp is running before attempting validation
+    # Check if webapp is actually responding before attempting validation
     try:
-        from bot import is_webapp_available
-        if not is_webapp_available():
-            return ValidationResult(
-                status="error",
-                decline_code=None,
-                stripe_pi_id=None,
-                bank_name=None,
-                card_brand=None,
-                error_message="Flask webapp is not running. Check server logs.",
-            )
-    except ImportError:
-        pass  # Skip check during testing or if bot module isn't available
+        import httpx
+        from config import config
+        webapp_url = f"http://127.0.0.1:{config.webapp_port}/health"
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"Checking webapp health at {webapp_url}...")
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(webapp_url)
+            _logger.info(f"Webapp health check: status={resp.status_code}, body={resp.text[:200]}")
+            if resp.status_code != 200:
+                return ValidationResult(
+                    status="error",
+                    decline_code=None,
+                    stripe_pi_id=None,
+                    bank_name=None,
+                    card_brand=None,
+                    error_message=f"Webapp health check failed (status {resp.status_code}).",
+                )
+    except Exception as e:
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.error(f"Webapp health check FAILED: {e}")
+        return ValidationResult(
+            status="error",
+            decline_code=None,
+            stripe_pi_id=None,
+            bank_name=None,
+            card_brand=None,
+            error_message=f"Flask webapp is not running on port {config.webapp_port}. Check server logs.",
+        )
 
     validation_id = str(uuid4())
     # Use custom amount if provided, otherwise fall back to config default

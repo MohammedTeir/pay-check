@@ -232,8 +232,6 @@ async def start_webapp(bot: Bot, dp: Dispatcher):
                 resp = await client.get(f"http://127.0.0.1:{config.webapp_port}/health")
                 if resp.status_code == 200:
                     logger.info(f"✅ Webapp started successfully on port {config.webapp_port}")
-                    global _webapp_available
-                    _webapp_available = True
                     return
         except Exception:
             pass
@@ -243,14 +241,6 @@ async def start_webapp(bot: Bot, dp: Dispatcher):
         f"❌ Webapp failed to start on port {config.webapp_port} after 10 seconds. "
         f"Stripe validation will not work. Check logs for errors."
     )
-
-
-# Global flag to track webapp availability
-_webapp_available = False
-
-def is_webapp_available() -> bool:
-    """Check if the Flask webapp is running and accessible."""
-    return _webapp_available
 
 
 async def main() -> None:
