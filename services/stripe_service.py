@@ -105,6 +105,7 @@ async def validate_card_with_stripe(
 
     try:
         # Validate card using Stripe Elements + PaymentIntent
+        logger.info(f"Calling validate_card_with_elements: webapp_url={config.webapp_url}, amount_cents={amount}")
         elements_result = await validate_card_with_elements(
             card_number=card.number,
             exp_month=card.exp_month,

@@ -253,6 +253,9 @@ async def main() -> None:
     # Setup signal handlers for graceful shutdown
     setup_signal_handlers(bot, dp)
 
+    # Log webapp config for debugging
+    logger.info(f"🌐 Webapp config: port={config.webapp_port}, url={config.webapp_url}")
+
     # Start Flask webapp for Stripe Elements (also registers /webhook route in webhook mode)
     if config.stripe_publishable_key:
         await start_webapp(bot, dp)
