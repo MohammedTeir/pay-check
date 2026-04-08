@@ -3,6 +3,7 @@ Stripe service — handles card validation using Stripe Elements (no SAQ D neede
 Uses Playwright automation with Stripe Elements for PCI-compliant validation.
 """
 
+import logging
 import random
 import time
 from dataclasses import dataclass
@@ -71,9 +72,7 @@ async def validate_card_with_stripe(
     # Check if webapp is actually responding before attempting validation
     try:
         import httpx
-        from config import config
         webapp_url = f"http://127.0.0.1:{config.webapp_port}/health"
-        import logging
         _logger = logging.getLogger(__name__)
         _logger.info(f"Checking webapp health at {webapp_url}...")
         async with httpx.AsyncClient(timeout=3.0) as client:
@@ -89,7 +88,6 @@ async def validate_card_with_stripe(
                     error_message=f"Webapp health check failed (status {resp.status_code}).",
                 )
     except Exception as e:
-        import logging
         _logger = logging.getLogger(__name__)
         _logger.error(f"Webapp health check FAILED: {e}")
         return ValidationResult(
