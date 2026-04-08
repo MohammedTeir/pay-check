@@ -121,11 +121,11 @@ class StripeElementsValidator:
             await asyncio.sleep(random.uniform(0.5, 2.0))
 
             # Navigate to validation page
-            await page.goto(self.webapp_url, wait_until="commit", timeout=15000)
-            
+            await page.goto(self.webapp_url, wait_until="commit", timeout=30000)
+
             # Wait for Stripe Elements iframe to load (may take a few seconds for Stripe.js)
             # Use first() to avoid strict mode violation (multiple iframes)
-            await page.wait_for_selector('#card-element iframe', timeout=12000)
+            await page.wait_for_selector('#card-element iframe', timeout=30000)
 
             # Get the first iframe (the card input frame, not the link button frame)
             iframe_element = page.frame_locator('#card-element iframe').first
