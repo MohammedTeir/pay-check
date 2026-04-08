@@ -15,8 +15,7 @@ RUN groupadd -r appuser && useradd -r -g appuser -d /home/appuser -s /sbin/nolog
 # Set Playwright browser install path (shared system-wide location)
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# PORT is set by Render at runtime (usually 10000)
-ENV PORT=10000
+# PORT is set by Render at runtime (not hardcoded here)
 
 WORKDIR /app
 
