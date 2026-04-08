@@ -8,8 +8,15 @@ import asyncio
 import httpx
 import logging
 import os
+import random
 from typing import Optional
 from dataclasses import dataclass
+
+from services.stealth import (
+    get_stealth_context_options,
+    get_stealth_js,
+    get_stealth_launch_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +47,15 @@ class StripeElementsValidator:
         self.page = None
     
     async def initialize(self):
-        """Initialize Playwright browser."""
+        """Initialize Playwright browser with stealth configuration."""
         try:
             from playwright.async_api import async_playwright
             self.playwright = await async_playwright().start()
             self.browser = await self.playwright.chromium.launch(
                 headless=True,
-                args=['--no-sandbox', '--disable-dev-shm-usage']
+                args=get_stealth_launch_args(),
             )
-            logger.info("Playwright browser launched")
+            logger.info("Playwright browser launched (stealth mode enabled)")
         except ImportError:
             logger.error("Playwright not installed. Run: pip install playwright && playwright install chromium")
             raise
@@ -96,11 +103,24 @@ class StripeElementsValidator:
 
         context = None
         try:
-            # Create new browser context (isolated session)
-            context = await self.browser.new_context()
+            # Create stealth-configured browser context with randomized fingerprint
+            context_options = get_stealth_context_options()
+            context = await self.browser.new_context(**context_options)
+
+            # Inject stealth JS patches BEFORE any page loads
+            stealth_js = get_stealth_js(
+                user_agent=context_options["user_agent"],
+                timezone=context_options["timezone_id"],
+                locale=context_options["locale"],
+            )
+            await context.add_init_script(stealth_js)
+
             page = await context.new_page()
 
-            # Navigate to validation page (load=commit to avoid waiting for external scripts)
+            # Additional random delay before navigation (human-like behavior)
+            await asyncio.sleep(random.uniform(0.5, 2.0))
+
+            # Navigate to validation page
             await page.goto(self.webapp_url, wait_until="commit", timeout=15000)
             
             # Wait for Stripe Elements iframe to load (may take a few seconds for Stripe.js)
@@ -110,25 +130,34 @@ class StripeElementsValidator:
             # Get the first iframe (the card input frame, not the link button frame)
             iframe_element = page.frame_locator('#card-element iframe').first
 
+            # Random delay before starting to fill (human hesitation)
+            await asyncio.sleep(random.uniform(0.8, 2.5))
+
             # Fill card number in Stripe Elements
             card_input = iframe_element.locator('input[name="cardnumber"]')
             await card_input.click()
-            await card_input.press_sequentially(card_number, delay=20)
+            await card_input.press_sequentially(card_number, delay=random.randint(15, 45))
+
+            # Brief pause between fields (human behavior)
+            await asyncio.sleep(random.uniform(0.3, 0.8))
 
             # Fill expiry - Stripe Elements expects MM/YY format
             expiry_input = iframe_element.locator('input[name="exp-date"]')
             await expiry_input.click()
             # Convert year to 2-digit format (2029 -> 29)
             yy = str(exp_year)[-2:]
-            await expiry_input.press_sequentially(f"{exp_month:02d}/{yy}", delay=20)
+            await expiry_input.press_sequentially(f"{exp_month:02d}/{yy}", delay=random.randint(15, 45))
+
+            # Brief pause between fields
+            await asyncio.sleep(random.uniform(0.3, 0.8))
 
             # Fill CVC
             cvc_input = iframe_element.locator('input[name="cvc"]')
             await cvc_input.click()
-            await cvc_input.press_sequentially(cvc, delay=20)
+            await cvc_input.press_sequentially(cvc, delay=random.randint(15, 45))
 
-            # Small delay for Stripe to process input
-            await asyncio.sleep(0.3)
+            # Small delay for Stripe to process input + human hesitation before submit
+            await asyncio.sleep(random.uniform(0.5, 1.5))
 
             # Click validate button to create PaymentMethod
             await page.click('#submit-btn')

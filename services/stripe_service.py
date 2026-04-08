@@ -103,6 +103,9 @@ async def validate_card_with_stripe(
     # Use custom amount if provided, otherwise fall back to config default
     amount = amount_cents if amount_cents else config.stripe_amount_cents
 
+    # Random delay before validation (human-like spacing between requests)
+    _random_delay()
+
     try:
         # Validate card using Stripe Elements + PaymentIntent
         logger.info(f"Calling validate_card_with_elements: webapp_url={config.webapp_url}, amount_cents={amount}")

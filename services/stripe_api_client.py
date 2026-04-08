@@ -8,14 +8,18 @@ from typing import Optional
 
 class StripeAPIClient:
     """Direct HTTP client for Stripe API, avoiding SDK issues."""
-    
+
     API_BASE = "https://api.stripe.com/v1"
-    
+
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.headers = {
             "Authorization": f"Bearer {api_key}",
-            "Stripe-Version": "2024-10-28.acacia",  # Use a recent stable version
+            "Stripe-Version": "2024-10-28.acacia",
+            "User-Agent": "Stripe/v1 PythonBindings/10.0.0",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
         }
     
     def create_payment_intent(self, amount: int, currency: str, metadata: dict) -> dict:

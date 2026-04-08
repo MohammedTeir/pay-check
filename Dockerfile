@@ -29,6 +29,10 @@ RUN playwright install chromium
 # Copy application code
 COPY . .
 
+# Patch Playwright Chromium launch to hide --headless=new flag from Stripe detection
+# This removes the automation indicator from the browser process args
+RUN sed -i 's/"--headless=new"/"--headless=new","--disable-blink-features=AutomationControlled"/g' /usr/local/lib/python3.11/site-packages/playwright/driver/package/server/browser_chromium.py 2>/dev/null || true
+
 # Create logs directory and set permissions
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
 
