@@ -143,7 +143,6 @@ async def validate_card_with_stripe(
             )
 
     except Exception as e:
-        import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Stripe Elements validation failed: {e}", exc_info=True)
         result = ValidationResult(
