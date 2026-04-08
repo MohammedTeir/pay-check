@@ -608,10 +608,12 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
     await state.update_data(validation_mode=mode, is_admin=is_adm)
     await state.set_state(CardValidationState.waiting_for_amount)
 
+    default_cents = config.stripe_amount_cents
+    default_dollars = f"${default_cents/100:.2f}".replace(".", "\\.")
     await query.message.edit_text(
         "💲 *Choose Validation Amount*\n\n"
         "Select the amount to charge for Stripe validation\\.\n"
-        f"Default: `{config.stripe_amount_cents}¢` \\(${config.stripe_amount_cents/100:.2f}\\)",
+        f"Default: `{default_cents}¢` \\({default_dollars}\\)",
         parse_mode="MarkdownV2",
         reply_markup=amount_selection_presets(is_admin=is_adm),
     )
@@ -645,8 +647,8 @@ async def cb_amount_custom(query: CallbackQuery, state: FSMContext) -> None:
     max_amount = 99999 if is_adm else 5000
 
     await query.answer()
-    min_display = f"${0.50}"
-    max_display = f"${max_amount/100:.2f}"
+    min_display = "$0.50".replace(".", "\\.")
+    max_display = f"${max_amount/100:.2f}".replace(".", "\\.")
     await query.message.edit_text(
         "✏️ *Enter Custom Amount*\n\n"
         "Send the amount in cents \\(e\\.g\\., `100` for \\$1\\.00\\)\\.\n\n"
@@ -716,8 +718,9 @@ async def _handle_custom_amount_input(message: Message, state: FSMContext) -> No
     is_adm = _is_admin(uid)
     max_amount = 99999 if is_adm else 5000
     if amount_cents > max_amount:
+        max_display = f"${max_amount/100:.2f}".replace(".", "\\.")
         await message.answer(
-            f"❌ Amount too high\\. Maximum is `{max_amount}` cents \\(\\${max_amount/100:.2f}\\)\\.",
+            f"❌ Amount too high\\. Maximum is `{max_amount}` cents \\({max_display}\\)\\.",
             parse_mode="MarkdownV2",
         )
         return
