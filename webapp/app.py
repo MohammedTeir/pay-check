@@ -58,6 +58,12 @@ def index():
     return render_template('validate.html', stripe_key=STRIPE_PUBLISHABLE_KEY)
 
 
+@app.route('/health')
+def health():
+    """Simple health check endpoint — no template dependencies."""
+    return jsonify({'status': 'ok', 'port': os.getenv('PORT', '5000')}), 200
+
+
 @app.route('/validate', methods=['POST'])
 def validate_card():
     """Receive card data and return Stripe publishable key for automation."""

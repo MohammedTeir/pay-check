@@ -182,6 +182,7 @@ async def start_webapp(bot: Bot, dp: Dispatcher):
     """
     import asyncio
     import threading
+    import time
     from flask import request as flask_request
     from waitress import serve
 
@@ -200,17 +201,44 @@ async def start_webapp(bot: Bot, dp: Dispatcher):
         )
         return "ok"
 
+    webapp_started = threading.Event()
+
     def run_waitress():
-        serve(
-            flask_app,
-            host='0.0.0.0',
-            port=config.webapp_port,
-            threads=2,
-        )
+        try:
+            logger.info(f"Starting Waitress on 0.0.0.0:{config.webapp_port}...")
+            serve(
+                flask_app,
+                host='0.0.0.0',
+                port=config.webapp_port,
+                threads=2,
+            )
+        except Exception as e:
+            logger.error(f"Waitress failed to start: {e}", exc_info=True)
+        finally:
+            webapp_started.set()
 
     thread = threading.Thread(target=run_waitress, daemon=True)
     thread.start()
-    logger.info(f"Waitress webapp started on port {config.webapp_port}")
+
+    # Wait until the webapp is actually responding (up to 10 seconds)
+    logger.info(f"Waiting for webapp to be ready at http://127.0.0.1:{config.webapp_port}/health...")
+    for attempt in range(20):
+        await asyncio.sleep(0.5)
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"http://127.0.0.1:{config.webapp_port}/health")
+                if resp.status_code == 200:
+                    logger.info(f"✅ Webapp started successfully on port {config.webapp_port}")
+                    return
+        except Exception:
+            pass
+
+    # If we get here, the webapp didn't respond in time
+    logger.error(
+        f"❌ Webapp failed to start on port {config.webapp_port} after 10 seconds. "
+        f"Stripe validation will not work. Check logs for errors."
+    )
 
 
 async def main() -> None:
