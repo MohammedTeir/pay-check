@@ -18,6 +18,8 @@ from services.crypto_service import decrypt
 from services.retry_handler import retry_async, is_stripe_retryable_error
 from services.stripe_elements_validator import validate_card_with_elements
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ValidationResult:
@@ -73,11 +75,10 @@ async def validate_card_with_stripe(
     try:
         import httpx
         webapp_url = f"http://127.0.0.1:{config.webapp_port}/health"
-        _logger = logging.getLogger(__name__)
-        _logger.info(f"Checking webapp health at {webapp_url}...")
+        logger.info(f"Checking webapp health at {webapp_url}...")
         async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.get(webapp_url)
-            _logger.info(f"Webapp health check: status={resp.status_code}, body={resp.text[:200]}")
+            logger.info(f"Webapp health check: status={resp.status_code}, body={resp.text[:200]}")
             if resp.status_code != 200:
                 return ValidationResult(
                     status="error",
@@ -88,8 +89,7 @@ async def validate_card_with_stripe(
                     error_message=f"Webapp health check failed (status {resp.status_code}).",
                 )
     except Exception as e:
-        _logger = logging.getLogger(__name__)
-        _logger.error(f"Webapp health check FAILED: {e}")
+        logger.error(f"Webapp health check FAILED: {e}")
         return ValidationResult(
             status="error",
             decline_code=None,
@@ -144,7 +144,6 @@ async def validate_card_with_stripe(
             )
 
     except Exception as e:
-        logger = logging.getLogger(__name__)
         logger.error(f"Stripe Elements validation failed: {e}", exc_info=True)
         result = ValidationResult(
             status="error",

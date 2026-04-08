@@ -264,14 +264,12 @@ _validator: Optional[StripeElementsValidator] = None
 async def get_validator(publishable_key: str, webapp_url: str = "http://127.0.0.1:5000") -> StripeElementsValidator:
     """Get or create the validator singleton."""
     global _validator
-    import logging
-    _logger = logging.getLogger(__name__)
     if _validator is None:
-        _logger.info(f"Creating new validator with webapp_url={webapp_url}")
+        logger.info(f"Creating new validator with webapp_url={webapp_url}")
         _validator = StripeElementsValidator(publishable_key=publishable_key, webapp_url=webapp_url)
         await _validator.initialize()
     else:
-        _logger.info(f"Reusing existing validator with webapp_url={_validator.webapp_url} (requested: {webapp_url})")
+        logger.info(f"Reusing existing validator with webapp_url={_validator.webapp_url} (requested: {webapp_url})")
     return _validator
 
 
@@ -304,11 +302,9 @@ async def validate_card_with_elements(
     Returns:
         CardValidationResult
     """
-    import logging
-    _logger = logging.getLogger(__name__)
-    _logger.info(f"validate_card_with_elements called with webapp_url={webapp_url}")
+    logger.info(f"validate_card_with_elements called with webapp_url={webapp_url}")
     validator = await get_validator(publishable_key=publishable_key, webapp_url=webapp_url)
-    _logger.info(f"Validator webapp_url={validator.webapp_url}")
+    logger.info(f"Validator webapp_url={validator.webapp_url}")
     return await validator.validate_card(
         card_number, exp_month, exp_year, cvc,
         user_id=user_id, validation_id=validation_id, amount_cents=amount_cents,
