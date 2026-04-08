@@ -70,6 +70,7 @@ class StripeElementsValidator:
         cvc: str,
         user_id: str = "unknown",
         validation_id: str = None,
+        amount_cents: int = None,
     ) -> CardValidationResult:
         """
         Validate a card using Stripe Elements + PaymentIntent full flow.
@@ -77,6 +78,18 @@ class StripeElementsValidator:
         2. Create PaymentIntent via backend API (with metadata)
         3. PaymentIntent is auto-confirmed (off_session=True)
         4. Return full validation result (no auto-cancel)
+
+        Args:
+            card_number: Full card number
+            exp_month: Expiration month (1-12)
+            exp_year: Expiration year (4-digit)
+            cvc: Card verification code
+            user_id: User identifier for metadata tracking
+            validation_id: Unique validation ID (auto-generated if not provided)
+            amount_cents: Custom amount in cents. Falls back to server default if None.
+
+        Returns:
+            CardValidationResult with validation outcome
         """
         if not self.browser:
             await self.initialize()
@@ -164,15 +177,19 @@ class StripeElementsValidator:
 
             # Step 2: Create and confirm PaymentIntent via backend (with metadata)
             async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "payment_method_id": payment_method_id,
+                    "user_id": str(user_id),
+                    "validation_id": validation_id,
+                    "card_bin": card_number[:6],
+                    "card_last4": card_number[-4:],
+                }
+                # Pass custom amount if specified
+                if amount_cents is not None:
+                    payload["amount_cents"] = amount_cents
                 intent_response = await client.post(
                     f"{self.webapp_url}/create_payment_intent",
-                    json={
-                        "payment_method_id": payment_method_id,
-                        "user_id": str(user_id),
-                        "validation_id": validation_id,
-                        "card_bin": card_number[:6],
-                        "card_last4": card_number[-4:],
-                    },
+                    json=payload,
                 )
                 intent_data = intent_response.json()
                 logger.info(f"PaymentIntent API response: status={intent_response.status_code}, body={intent_data}")
@@ -262,6 +279,7 @@ async def validate_card_with_elements(
     webapp_url: str = "http://127.0.0.1:5000",
     user_id: str = "unknown",
     validation_id: str = None,
+    amount_cents: int = None,
 ) -> CardValidationResult:
     """
     Convenience function to validate a card using Stripe Elements + PaymentIntent.
@@ -276,6 +294,7 @@ async def validate_card_with_elements(
         webapp_url: URL of the Flask webapp
         user_id: User identifier for metadata tracking
         validation_id: Unique validation ID (auto-generated if not provided)
+        amount_cents: Custom amount in cents. Falls back to server default if None.
 
     Returns:
         CardValidationResult
@@ -283,5 +302,5 @@ async def validate_card_with_elements(
     validator = await get_validator(publishable_key=publishable_key, webapp_url=webapp_url)
     return await validator.validate_card(
         card_number, exp_month, exp_year, cvc,
-        user_id=user_id, validation_id=validation_id,
+        user_id=user_id, validation_id=validation_id, amount_cents=amount_cents,
     )

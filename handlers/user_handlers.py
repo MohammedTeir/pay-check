@@ -36,6 +36,7 @@ from utils.keyboards import (
     back_to_user_menu,
     plans_list,
     validation_choices,
+    amount_selection_presets,
 )
 
 logger = logging.getLogger(__name__)
@@ -533,12 +534,21 @@ async def cb_u_menu(query: CallbackQuery) -> None:
 # ── Card input FSM ────────────────────────────────────────────────────────
 
 async def handle_card_text(message: Message, state: FSMContext) -> None:
+    """Handle card text input or custom amount input during validation flow."""
     uid = message.from_user.id
     user = User.get_by_telegram_id(uid)
     if not user:
         await message.answer("⚠️ Use `/start`\\.", parse_mode="MarkdownV2"); return
     if user.is_banned:
         await message.answer("🚫 Suspended\\.", parse_mode="MarkdownV2"); return
+
+    # Check if user is in amount selection mode (custom amount input)
+    current_state = await state.get_state()
+    if current_state == CardValidationState.waiting_for_amount.state:
+        await _handle_custom_amount_input(message, state)
+        return
+
+    # Otherwise, handle normal card input
     card = parse_card_input(message.text.strip())
     if not card:
         await message.answer("❌ Bad format\\. Use: `number|mm|yyyy|cvv`", parse_mode="MarkdownV2"); return
@@ -560,22 +570,245 @@ async def handle_card_text(message: Message, state: FSMContext) -> None:
 
 
 async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    """Stage 1: Handle validation mode selection (BIN/Stripe/Both).
+
+    If BIN-only → process directly (no amount needed).
+    If Stripe/Both → show amount selection keyboard, store mode in FSM.
+    """
     mode = query.data.split(":")[1]
     uid = query.from_user.id
     user = User.get_by_telegram_id(uid)
     if not user:
         await query.answer("⚠️ Not found", show_alert=True); return
+
     d = await state.get_data()
     cn = d.get("card_number")
     if not cn:
-        await query.answer("❌ Card data expired", show_alert=True); await state.clear(); return
+        await query.answer("❌ Card data expired", show_alert=True)
+        await state.clear()
+        return
+
+    await query.answer()
+
+    # BIN-only validation doesn't need amount — process directly
+    if mode == "bin":
+        await _process_validation(query, state, bot, mode=mode, amount_cents=None)
+        return
+
+    # Stripe or Both — need amount selection first
+    sa = StripeAccount.get_active()
+    do_stripe = mode in ("stripe", "both") and bool(sa)
+    if not do_stripe:
+        # Stripe not available (no active account), fall back to BIN
+        await _process_validation(query, state, bot, mode="bin", amount_cents=None)
+        return
+
+    # Store the selected mode and show amount selection
+    is_adm = _is_admin(uid)
+    await state.update_data(validation_mode=mode, is_admin=is_adm)
+    await state.set_state(CardValidationState.waiting_for_amount)
+
+    await query.message.edit_text(
+        "💲 *Choose Validation Amount*\n\n"
+        "Select the amount to charge for Stripe validation\\.\n"
+        f"Default: `{config.stripe_amount_cents}¢` \\(${config.stripe_amount_cents/100:.2f}\\)",
+        parse_mode="MarkdownV2",
+        reply_markup=amount_selection_presets(is_admin=is_adm),
+    )
+
+
+async def cb_amount_preset(query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    """Handle preset amount selection from the amount keyboard."""
+    # Extract amount from callback data (e.g., "amt:100" → 100)
+    amount_cents = int(query.data.split(":")[1])
+    uid = query.from_user.id
+
+    # Validate amount bounds
+    if amount_cents < 50:
+        await query.answer("⚠️ Minimum amount is 50¢", show_alert=True)
+        return
+
+    is_adm = _is_admin(uid)
+    max_amount = 99999 if is_adm else 5000
+    if amount_cents > max_amount:
+        await query.answer(f"⚠️ Maximum amount is ${max_amount/100:.2f}", show_alert=True)
+        return
+
+    await query.answer()
+    await _process_validation(query, state, bot, mode=None, amount_cents=amount_cents)
+
+
+async def cb_amount_custom(query: CallbackQuery, state: FSMContext) -> None:
+    """Prompt user to enter a custom amount via text input."""
+    uid = query.from_user.id
+    is_adm = _is_admin(uid)
+    max_amount = 99999 if is_adm else 5000
+
+    await query.answer()
+    min_display = f"${0.50}"
+    max_display = f"${max_amount/100:.2f}"
+    await query.message.edit_text(
+        "✏️ *Enter Custom Amount*\n\n"
+        "Send the amount in cents \\(e\\.g\\., `100` for \\$1\\.00\\)\\.\n\n"
+        f"• Minimum: `50` cents \\({min_display}\\)\n"
+        f"• Maximum: `{max_amount}` cents \\({max_display}\\)\n\n"
+        "⚠️ Must be a whole number\\.",
+        parse_mode="MarkdownV2",
+        reply_markup=back_to_user_menu(),
+    )
+    # State remains in waiting_for_amount for text input
+
+
+async def cb_validate_mode_back(query: CallbackQuery, state: FSMContext) -> None:
+    """Go back to validation mode selection from amount screen."""
+    uid = query.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await query.answer("⚠️ Not found", show_alert=True); return
+
+    # Reset the validation_mode from FSM data
+    await state.update_data(validation_mode=None)
+
+    sa = StripeAccount.get_active()
+    bc = int(Settings.get("bin_validation_cost") or "0")
+    sc = int(Settings.get("stripe_validation_cost") or "1")
+    is_adm = _is_admin(uid)
+    display_bc = 0 if is_adm else bc
+    display_sc = 0 if is_adm else sc
+
+    await query.answer()
+    await query.message.edit_text(
+        f"💳 Card `{user.telegram_id}****` parsed\\. Choose mode:",
+        parse_mode="MarkdownV2",
+        reply_markup=validation_choices(stripe_available=bool(sa), bin_cost=display_bc, stripe_cost=display_sc),
+    )
+
+
+async def _handle_custom_amount_input(message: Message, state: FSMContext) -> None:
+    """Validate and process user's custom amount text input."""
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Not found\\.", parse_mode="MarkdownV2"); return
+
+    text = message.text.strip()
+
+    # Validate that input is a positive integer
+    try:
+        amount_cents = int(text)
+    except ValueError:
+        await message.answer(
+            "❌ Invalid amount\\. Send a whole number in cents\\.\n\n"
+            f"Example: `100` for \\$1\\.00",
+            parse_mode="MarkdownV2",
+        )
+        return
+
+    # Validate minimum amount
+    if amount_cents < 50:
+        await message.answer(
+            "❌ Amount too low\\. Minimum is `50` cents \\(\\$0\\.50\\)\\.",
+            parse_mode="MarkdownV2",
+        )
+        return
+
+    # Validate maximum amount
+    is_adm = _is_admin(uid)
+    max_amount = 99999 if is_adm else 5000
+    if amount_cents > max_amount:
+        await message.answer(
+            f"❌ Amount too high\\. Maximum is `{max_amount}` cents \\(\\${max_amount/100:.2f}\\)\\.",
+            parse_mode="MarkdownV2",
+        )
+        return
+
+    # Process validation with the custom amount
+    # We need to convert Message to a query-like object for _process_validation
+    await _process_validation_from_message(message, state, amount_cents)
+
+
+async def _process_validation_from_message(message: Message, state: FSMContext, amount_cents: int) -> None:
+    """Process card validation when triggered from a Message (custom amount input).
+
+    Wraps the message data and delegates to _process_validation_with_bot.
+    """
+    uid = message.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await message.answer("⚠️ Not found\\.", parse_mode="MarkdownV2"); return
+
+    d = await state.get_data()
+    cn = d.get("card_number")
+    if not cn:
+        await message.answer("❌ Card data expired\\. Start over\\.", parse_mode="MarkdownV2")
+        await state.clear()
+        return
+
+    # Get the validation mode from FSM data, default to "stripe"
+    mode = d.get("validation_mode", "stripe")
+
+    # Send processing message
+    proc_msg = await message.answer("⏳ Processing\\.\\.\\.", parse_mode="MarkdownV2")
+    await state.clear()
+
+    # Get bot from the dispatcher via the message
+    bot = message.bot
+    await _run_validation(message, proc_msg, uid, user, cn, d, mode, amount_cents, bot)
+
+
+async def _process_validation(query: CallbackQuery, state: FSMContext, bot: Bot, mode: str, amount_cents: int) -> None:
+    """Core validation logic extracted for reuse from both callback and amount handlers.
+
+    Args:
+        query: The callback query that triggered validation
+        state: FSM context
+        bot: Bot instance for notifications
+        mode: Validation mode ("bin", "stripe", "both") or None (determined from FSM)
+        amount_cents: Custom amount in cents, or None to use config default
+    """
+    uid = query.from_user.id
+    user = User.get_by_telegram_id(uid)
+    if not user:
+        await query.answer("⚠️ Not found", show_alert=True); return
+
+    d = await state.get_data()
+    cn = d.get("card_number")
+    if not cn:
+        await query.answer("❌ Card data expired", show_alert=True)
+        await state.clear()
+        return
+
+    # If mode not provided, get from FSM data (amount selection flow)
+    if mode is None:
+        mode = d.get("validation_mode", "stripe")
+
+    proc_msg = await query.message.answer("⏳ Processing\\.\\.\\.", parse_mode="MarkdownV2")
+    await state.clear()
+
+    await _run_validation(query.message, proc_msg, uid, user, cn, d, mode, amount_cents, bot)
+
+
+async def _run_validation(message, proc_msg, uid, user, cn, d, mode, amount_cents, bot):
+    """Execute the actual card validation logic.
+
+    Shared between callback-based and message-based validation triggers.
+
+    Args:
+        message: Original message (for edit_text)
+        proc_msg: Processing message (to delete after validation)
+        uid: User Telegram ID
+        user: User model instance
+        cn: Card number
+        d: FSM data dictionary
+        mode: Validation mode ("bin", "stripe", "both")
+        amount_cents: Custom amount in cents, or None for default
+        bot: Bot instance
+    """
     from services.card_validator import CardInfo
     card = CardInfo(
         number=cn, exp_month=int(d["exp_month"]), exp_year=int(d["exp_year"]),
         cvv=d["cvv"], bin_code=d["bin_code"], last4=d["last4"])
-    proc_msg = await query.message.answer("⏳ Processing\\.\\.\\.", parse_mode="MarkdownV2")
-    await query.answer()  # Answer immediately to avoid timeout
-    await state.clear()
+
     sa = StripeAccount.get_active()
     bc = int(Settings.get("bin_validation_cost") or "0")
     sc = int(Settings.get("stripe_validation_cost") or "1")
@@ -587,7 +820,7 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
     if not is_adm:
         if user.credits < total:
             await proc_msg.delete()
-            await query.message.edit_text(
+            await message.edit_text(
                 f"❌ Need `{total}` credits\\. Have `{user.credits}`",
                 parse_mode="MarkdownV2", reply_markup=back_to_user_menu()); return
         if total > 0:
@@ -656,7 +889,8 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
     if do_stripe and sa:
         from utils.card_hash import hash_card_number
         try:
-            r = await validate_card_with_stripe(card, uid, sa)
+            # Pass custom amount_cents to Stripe validation
+            r = await validate_card_with_stripe(card, uid, sa, amount_cents=amount_cents)
             if r.status == "valid":
                 ValidationLog.create(
                     user_id=uid, card_bin=d["bin_code"], last4=d["last4"],
@@ -728,16 +962,16 @@ async def cb_validate_choice(query: CallbackQuery, state: FSMContext, bot: Bot) 
         lines.append(f"💰 Credits: `{bal}` \\(\\-{total}\\)")
     else:
         lines.append(f"💰 Credits: `{bal}` \\(free\\)")
-    
+
     # Send low balance notification if applicable
     if not is_adm and user.credits < 10:
         try:
             await notify_low_balance(bot, user, threshold=10)
         except Exception:
             pass  # Don't let notification errors break the flow
-    
+
     await proc_msg.delete()
-    await query.message.edit_text(
+    await message.edit_text(
         "\n".join(lines), parse_mode="MarkdownV2",
         reply_markup=back_to_user_menu())
 

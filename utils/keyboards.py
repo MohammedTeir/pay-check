@@ -238,3 +238,24 @@ def validation_choices(stripe_available: bool = False,
         kb.append([InlineKeyboardButton(text=f"🔄 Both ({both_cost} credit)", callback_data=f"val_mode:both")])
     kb.append([InlineKeyboardButton(text="🔙 Cancel", callback_data="val_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def amount_selection_presets(is_admin: bool = False) -> InlineKeyboardMarkup:
+    """Inline keyboard for selecting Stripe validation amount.
+
+    Args:
+        is_admin: If True, show additional presets ($5) and custom amount option.
+
+    Returns:
+        InlineKeyboardMarkup with amount preset buttons.
+    """
+    kb = [
+        [InlineKeyboardButton(text="💵 Default (50¢)", callback_data="amt:50")],
+        [InlineKeyboardButton(text="💵 $1.00", callback_data="amt:100")],
+        [InlineKeyboardButton(text="💵 $2.00", callback_data="amt:200")],
+    ]
+    if is_admin:
+        kb.append([InlineKeyboardButton(text="💵 $5.00", callback_data="amt:500")])
+        kb.append([InlineKeyboardButton(text="✏️ Custom Amount", callback_data="amt:custom")])
+    kb.append([InlineKeyboardButton(text="🔙 Back to Modes", callback_data="val_mode_back")])
+    return InlineKeyboardMarkup(inline_keyboard=kb)

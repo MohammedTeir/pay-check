@@ -61,9 +61,11 @@ def index():
 @app.route('/validate', methods=['POST'])
 def validate_card():
     """Receive card data and return Stripe publishable key for automation."""
+    data = request.json or {}
+    amount = data.get('amount_cents', STRIPE_AMOUNT_CENTS)
     return jsonify({
         'publishable_key': STRIPE_PUBLISHABLE_KEY,
-        'amount': STRIPE_AMOUNT_CENTS,
+        'amount': amount,
         'success': True
     })
 
@@ -85,8 +87,10 @@ def create_payment_intent():
 
         data = request.json
         payment_method_id = data.get('payment_method_id')
+        # Accept custom amount from request, fallback to env var default
+        amount = int(data.get('amount_cents', STRIPE_AMOUNT_CENTS))
 
-        logger.info(f"Creating PaymentIntent for: {payment_method_id}")
+        logger.info(f"Creating PaymentIntent for: {payment_method_id}, amount: {amount}")
 
         if not payment_method_id:
             return jsonify({'success': False, 'error': 'Missing payment_method_id'}), 400
@@ -102,7 +106,7 @@ def create_payment_intent():
 
         # Create and confirm PaymentIntent via direct HTTP
         form_data = {
-            'amount': STRIPE_AMOUNT_CENTS,
+            'amount': amount,
             'currency': 'usd',
             'payment_method': payment_method_id,
             'capture_method': 'manual',

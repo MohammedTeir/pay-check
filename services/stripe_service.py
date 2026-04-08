@@ -42,10 +42,20 @@ async def validate_card_with_stripe(
     card: CardInfo,
     user_telegram_id: int,
     stripe_account: StripeAccount,
+    amount_cents: int = None,
 ) -> ValidationResult:
     """
     Validate card using Stripe Elements (no SAQ D needed!).
     Uses Playwright automation with Stripe Elements in headless browser.
+
+    Args:
+        card: CardInfo object with card details
+        user_telegram_id: Telegram user ID for logging
+        stripe_account: Active StripeAccount from database
+        amount_cents: Optional custom amount in cents. Falls back to config value if None.
+
+    Returns:
+        ValidationResult with validation outcome
     """
     publishable_key = config.stripe_publishable_key
     if not publishable_key:
@@ -59,7 +69,8 @@ async def validate_card_with_stripe(
         )
 
     validation_id = str(uuid4())
-    amount = config.stripe_amount_cents
+    # Use custom amount if provided, otherwise fall back to config default
+    amount = amount_cents if amount_cents else config.stripe_amount_cents
 
     try:
         # Validate card using Stripe Elements + PaymentIntent
@@ -72,6 +83,7 @@ async def validate_card_with_stripe(
             webapp_url=config.webapp_url,
             user_id=str(user_telegram_id),
             validation_id=validation_id,
+            amount_cents=amount,
         )
 
         if elements_result.success:

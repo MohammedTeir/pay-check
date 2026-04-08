@@ -26,6 +26,7 @@ from handlers.user_handlers import (
     cb_u_validate, cb_u_balance, cb_u_plans, cb_u_history, cb_u_help, cb_u_menu, cb_u_quota,
     cb_u_export_history, cb_export_json, cb_export_csv, cb_export_txt,
     handle_card_text, cb_validate_choice, cb_validate_cancel,
+    cb_amount_preset, cb_amount_custom, cb_validate_mode_back,
 )
 from utils.health import cmd_ping, cmd_health
 from handlers.admin_handlers import (
@@ -162,7 +163,7 @@ def setup_signal_handlers(bot: Bot, dp: Dispatcher) -> None:
 async def handle_text(message: Message, state: FSMContext, bot: Bot) -> None:
     cur = await state.get_state()
     from states import CardValidationState
-    if cur in (CardValidationState.waiting_for_card.state, CardValidationState.pending_choice.state):
+    if cur in (CardValidationState.waiting_for_card.state, CardValidationState.pending_choice.state, CardValidationState.waiting_for_amount.state):
         await handle_card_text(message, state)
         return
     admin_states = {s.state for s in AdminFSM.__dict__.values() if hasattr(s, 'state')}
@@ -269,6 +270,14 @@ async def main() -> None:
         await cb_validate_choice(query, state, bot)
     dp.callback_query.register(_val_choice_handler, F.data.regexp(r"^val_mode:"))
     dp.callback_query.register(cb_validate_cancel, F.data == "val_cancel")
+
+    # Amount selection callbacks
+    async def _amount_preset_handler(query: CallbackQuery, state: FSMContext):
+        bot = query.bot
+        await cb_amount_preset(query, state, bot)
+    dp.callback_query.register(_amount_preset_handler, F.data.regexp(r"^amt:\d+$"))
+    dp.callback_query.register(cb_amount_custom, F.data == "amt:custom")
+    dp.callback_query.register(cb_validate_mode_back, F.data == "val_mode_back")
 
     # ── Callback: Admin ───────────────────────────────────────────────
     dp.callback_query.register(cb_a_main, F.data == "a_main")

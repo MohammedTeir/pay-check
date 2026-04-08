@@ -7,3 +7,4 @@ class CardValidationState(StatesGroup):
     """User is in card input mode."""
     waiting_for_card = State()
     pending_choice = State()  # waiting for user to choose validation mode
+    waiting_for_amount = State()  # waiting for user to choose/custom input amount for Stripe validation
